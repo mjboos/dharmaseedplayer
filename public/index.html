@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DharmaSeed Player</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header>
+    <h1>DharmaSeed Player</h1>
+  </header>
+
+  <main>
+    <div id="search-area">
+      <form id="search-form">
+        <input type="search" id="search-input" placeholder="Search talks..." autocomplete="off" />
+        <button type="submit">Search</button>
+      </form>
+      <div id="search-results"></div>
+      <button id="load-more" hidden>Load more</button>
+    </div>
+  </main>
+
+  <div id="queue-toggle">
+    <button id="queue-btn">Queue (<span id="queue-count">0</span>)</button>
+  </div>
+
+  <div id="queue-panel" class="hidden">
+    <div id="queue-header">
+      <h2>Queue</h2>
+      <button id="queue-close">&times;</button>
+    </div>
+    <div id="queue-list"></div>
+  </div>
+
+  <div id="player-bar" class="hidden">
+    <div id="player-progress-wrap">
+      <div id="player-progress"></div>
+    </div>
+    <div id="player-controls">
+      <div id="player-info">
+        <span id="player-title"></span>
+        <span id="player-teacher"></span>
+      </div>
+      <div id="player-buttons">
+        <button id="player-rewind" title="Back 15s">-15</button>
+        <button id="player-play-pause" title="Play/Pause">&#9654;</button>
+        <button id="player-forward" title="Forward 30s">+30</button>
+      </div>
+      <div id="player-time">
+        <span id="player-current">0:00</span> / <span id="player-duration">0:00</span>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
