@@ -121,6 +121,53 @@ header h1 {
   cursor: pointer;
 }
 
+.retreat-page-header {
+  margin-bottom: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.retreat-page-name {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #2d5016;
+}
+
+.queue-all-btn {
+  padding: 8px 14px;
+  background: #2d5016;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.queue-all-btn:hover {
+  background: #3d6b20;
+}
+
+.talk-retreat {
+  margin-top: 4px;
+}
+
+.retreat-link {
+  background: none;
+  border: none;
+  color: #2d5016;
+  font-size: 0.82rem;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.retreat-link:hover {
+  color: #3d6b20;
+}
+
 .talk-item {
   background: white;
   border-radius: 8px;

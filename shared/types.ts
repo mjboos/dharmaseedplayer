@@ -5,6 +5,8 @@ export interface Talk {
   durationMinutes: number;
   date: string;
   audioUrl: string;
+  retreatId?: number;
+  retreatTitle?: string;
 }
 
 export interface TalkDetail extends Talk {

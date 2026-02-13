@@ -1,21 +1,25 @@
-import { searchTalks, searchTeachers, getTeacherTalks } from "./api.js";
+import { searchTalks, searchTeachers, getTeacherTalks, getRetreatTalks } from "./api.js";
 import { getPositionForTalk, formatTime } from "./player.js";
 
 let currentQuery = "";
 let currentPage = 1;
 let activeTeacherId = null;
 let activeTeacherName = "";
+let activeRetreatId = null;
+let activeRetreatName = "";
 let teacherQuery = "";
 let loading = false;
 let playHandler = null;
 let queueHandler = null;
+let queueAddAllHandler = null;
 
 const resultsEl = document.getElementById("search-results");
 const loadMoreBtn = document.getElementById("load-more");
 
-export function initSearch({ onPlay, onQueue }) {
+export function initSearch({ onPlay, onQueue, onQueueAll }) {
   playHandler = onPlay;
   queueHandler = onQueue;
+  queueAddAllHandler = onQueueAll;
   const form = document.getElementById("search-form");
   const input = document.getElementById("search-input");
 
@@ -26,6 +30,7 @@ export function initSearch({ onPlay, onQueue }) {
     currentQuery = q;
     currentPage = 1;
     activeTeacherId = null;
+    activeRetreatId = null;
     resultsEl.innerHTML = "";
     loadMoreBtn.hidden = true;
     doSearch();
@@ -33,7 +38,9 @@ export function initSearch({ onPlay, onQueue }) {
 
   loadMoreBtn.addEventListener("click", () => {
     currentPage++;
-    if (activeTeacherId) {
+    if (activeRetreatId) {
+      loadRetreatTalks(activeRetreatId, false);
+    } else if (activeTeacherId) {
       loadTeacherTalks(activeTeacherId, false);
     } else {
       doSearch(false);
@@ -85,7 +92,6 @@ async function doSearch(clear = true) {
 
     const [talkResult, teacherResult] = await Promise.all(promises);
 
-    // Remove loading indicator
     resultsEl.querySelectorAll(".loading").forEach((el) => el.remove());
 
     // Show matching teachers above talk results (first page only)
@@ -100,6 +106,7 @@ async function doSearch(clear = true) {
         chip.addEventListener("click", () => {
           activeTeacherId = teacher.id;
           activeTeacherName = teacher.name;
+          activeRetreatId = null;
           teacherQuery = "";
           currentPage = 1;
           resultsEl.innerHTML = "";
@@ -147,7 +154,6 @@ function renderTeacherHeader(teacherName) {
     const input = filterForm.querySelector(".teacher-filter-input");
     teacherQuery = input.value.trim();
     currentPage = 1;
-    // Remove everything except the header
     for (const child of [...resultsEl.children]) {
       if (!child.classList.contains("teacher-page-header")) child.remove();
     }
@@ -190,6 +196,75 @@ async function loadTeacherTalks(teacherId, clear) {
   }
 }
 
+// --- Retreat page ---
+
+function renderRetreatHeader(retreatName) {
+  const header = document.createElement("div");
+  header.className = "retreat-page-header";
+  header.innerHTML = `
+    <div class="retreat-page-name">${esc(retreatName)}</div>
+    <button class="queue-all-btn">Add all to queue</button>
+  `;
+  header.querySelector(".queue-all-btn").addEventListener("click", () => {
+    const talkEls = resultsEl.querySelectorAll(".talk-item");
+    const talks = [...talkEls].map((el) => JSON.parse(el.dataset.talk));
+    if (queueAddAllHandler) queueAddAllHandler(talks);
+  });
+  return header;
+}
+
+export function openRetreat(retreatId, retreatName) {
+  activeRetreatId = retreatId;
+  activeRetreatName = retreatName || "Retreat";
+  activeTeacherId = null;
+  currentPage = 1;
+  resultsEl.innerHTML = "";
+  loadMoreBtn.hidden = true;
+  loadRetreatTalks(retreatId, true);
+}
+
+async function loadRetreatTalks(retreatId, clear) {
+  if (loading) return;
+  loading = true;
+
+  if (clear) {
+    resultsEl.innerHTML = "";
+    resultsEl.appendChild(renderRetreatHeader(activeRetreatName));
+  }
+  resultsEl.insertAdjacentHTML("beforeend", '<div class="loading">Loading...</div>');
+
+  try {
+    const result = await getRetreatTalks(retreatId, currentPage);
+    resultsEl.querySelectorAll(".loading").forEach((el) => el.remove());
+
+    // Update header with server-provided retreat title if we only had a stub
+    if (result.retreatTitle && activeRetreatName === "Retreat") {
+      activeRetreatName = result.retreatTitle;
+      const nameEl = resultsEl.querySelector(".retreat-page-name");
+      if (nameEl) nameEl.textContent = result.retreatTitle;
+    }
+
+    if (result.talks.length === 0 && currentPage === 1) {
+      resultsEl.insertAdjacentHTML("beforeend", '<div class="empty-state">No talks found</div>');
+      loadMoreBtn.hidden = true;
+      return;
+    }
+
+    for (const talk of result.talks) {
+      resultsEl.appendChild(renderTalk(talk));
+    }
+
+    loadMoreBtn.hidden = !result.hasMore;
+  } catch (err) {
+    resultsEl.querySelectorAll(".loading").forEach((el) => el.remove());
+    resultsEl.insertAdjacentHTML("beforeend", '<div class="empty-state">Failed to load retreat talks.</div>');
+  } finally {
+    loading = false;
+  }
+}
+
+// --- Talk rendering ---
+
 function renderTalk(talk) {
   const el = document.createElement("div");
   el.className = "talk-item";
@@ -207,6 +282,7 @@ function renderTalk(talk) {
       <span>${esc(talk.date)}</span>
       <span>${talk.durationMinutes} min</span>
     </div>
+    ${talk.retreatTitle && !activeRetreatId ? `<div class="talk-retreat"><button class="retreat-link" data-retreat-id="${talk.retreatId}">${esc(talk.retreatTitle)}</button></div>` : ""}
     <div class="talk-actions">
       <button class="play-btn">Play</button>
       ${savedPos > 0 ? `<button class="resume-btn">Resume ${formatTime(savedPos)}</button>` : ""}
@@ -219,11 +295,17 @@ function renderTalk(talk) {
     resumeBtn.addEventListener("click", () => playHandler(talk));
   }
   el.querySelector(".queue-btn").addEventListener("click", () => queueHandler(talk));
+  const retreatLink = el.querySelector(".retreat-link");
+  if (retreatLink) {
+    retreatLink.addEventListener("click", () => {
+      openRetreat(talk.retreatId, talk.retreatTitle);
+    });
+  }
   return el;
 }
 
 function esc(str) {
   const d = document.createElement("div");
-  d.textContent = str;
+  d.textContent = str || "";
   return d.innerHTML;
 }

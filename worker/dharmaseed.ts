@@ -72,7 +72,16 @@ function parseTalkList(html: string, page: number): SearchResponse {
     const audioMatch = block.match(/href="(\/talks\/\d+\/[^"]*\.mp3)"/);
     const audioUrl = audioMatch ? `${BASE}${audioMatch[1]}` : "";
 
-    talks.push({ id, title, teacher, durationMinutes, date, audioUrl });
+    // Extract retreat info
+    const retreatMatch = block.match(
+      /href="\/retreats\/(\d+)\/">\s*<i>([\s\S]*?)<\/i>/
+    );
+    const retreatId = retreatMatch ? parseInt(retreatMatch[1], 10) : undefined;
+    const retreatTitle = retreatMatch
+      ? decodeEntities(retreatMatch[2].trim())
+      : undefined;
+
+    talks.push({ id, title, teacher, durationMinutes, date, audioUrl, retreatId, retreatTitle });
   }
 
   // Check if there's a next page
@@ -163,6 +172,25 @@ export async function fetchTeacherTalks(
   }
 
   return result;
+}
+
+export async function fetchRetreatTalks(
+  retreatId: number,
+  page: number
+): Promise<SearchResponse & { retreatTitle?: string }> {
+  const url = `${BASE}/retreats/${retreatId}/?sort=rec_date&page=${page}&page_items=100`;
+  const res = await fetch(url, {
+    headers: { "User-Agent": "DharmaSeedPlayer/1.0" },
+  });
+  if (!res.ok) throw new Error(`Retreat talks failed: ${res.status}`);
+  const html = await res.text();
+  const result = parseTalkList(html, page);
+
+  // Extract retreat title from the page
+  const titleMatch = html.match(/<h2>([\s\S]*?)<\/h2>/);
+  const retreatTitle = titleMatch ? decodeEntities(titleMatch[1].trim()) : undefined;
+
+  return { ...result, retreatTitle };
 }
 
 export async function fetchTalkDetail(
