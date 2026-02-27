@@ -109,44 +109,78 @@ function decodeEntities(str: string): string {
     .replace(/&nbsp;/g, " ");
 }
 
+// Cached list of all teachers (loaded once from JSON API)
+let allTeachers: Teacher[] | null = null;
+let teacherListLoading: Promise<Teacher[]> | null = null;
+
+async function loadAllTeachers(): Promise<Teacher[]> {
+  if (allTeachers) return allTeachers;
+  if (teacherListLoading) return teacherListLoading;
+
+  teacherListLoading = (async () => {
+    try {
+      // Step 1: Get all teacher IDs
+      const idsBody = new URLSearchParams({ detail: "0" });
+      const idsRes = await fetch(`${BASE}/api/1/teachers/`, {
+        method: "POST",
+        body: idsBody,
+        headers: { "User-Agent": "DharmaSeedPlayer/1.0" },
+      });
+      if (!idsRes.ok) throw new Error(`Teacher list failed: ${idsRes.status}`);
+      const idsJson = (await idsRes.json()) as { items?: number[] };
+      const ids = idsJson.items || [];
+
+      // Step 2: Batch fetch teacher details (500 at a time)
+      const teachers: Teacher[] = [];
+      for (let i = 0; i < ids.length; i += 500) {
+        const batch = ids.slice(i, i + 500);
+        const body = new URLSearchParams({
+          detail: "1",
+          items: batch.join(","),
+        });
+        const res = await fetch(`${BASE}/api/1/teachers/`, {
+          method: "POST",
+          body,
+          headers: { "User-Agent": "DharmaSeedPlayer/1.0" },
+        });
+        if (!res.ok) {
+          throw new Error(`Teacher detail batch failed: ${res.status}`);
+        }
+        const json = (await res.json()) as {
+          items?: Record<string, { name?: string }>;
+        };
+        if (json.items) {
+          for (const [idStr, data] of Object.entries(json.items)) {
+            if (data.name) {
+              teachers.push({ id: parseInt(idStr, 10), name: data.name });
+            }
+          }
+        }
+      }
+
+      allTeachers = teachers;
+      return teachers;
+    } finally {
+      teacherListLoading = null;
+    }
+  })();
+
+  return teacherListLoading;
+}
+
 export async function searchTeachers(
   query: string
 ): Promise<TeacherSearchResponse> {
-  const url = `${BASE}/teachers/?search=${encodeURIComponent(query)}`;
-  const res = await fetch(url, {
-    headers: { "User-Agent": "DharmaSeedPlayer/1.0" },
-    redirect: "manual",
+  const teachers = await loadAllTeachers();
+  const q = query.toLowerCase();
+  const matches = teachers.filter((t) => t.name.toLowerCase().includes(q));
+  // Sort: prefer names that start with the query
+  matches.sort((a, b) => {
+    const aStarts = a.name.toLowerCase().startsWith(q) ? 0 : 1;
+    const bStarts = b.name.toLowerCase().startsWith(q) ? 0 : 1;
+    return aStarts - bStarts || a.name.localeCompare(b.name);
   });
-
-  // If single match, dharmaseed redirects to the teacher's page
-  if (res.status >= 300 && res.status < 400) {
-    const location = res.headers.get("location") || "";
-    const match = location.match(/\/teacher\/(\d+)/);
-    if (match) {
-      const id = parseInt(match[1], 10);
-      const name = await resolveTeacher(id);
-      return { teachers: [{ id, name: name || `Teacher ${id}` }] };
-    }
-    return { teachers: [] };
-  }
-
-  if (!res.ok) return { teachers: [] };
-  const html = await res.text();
-  return parseTeacherList(html);
-}
-
-function parseTeacherList(html: string): TeacherSearchResponse {
-  const teachers: Teacher[] = [];
-  // Pattern: <a class="talkteacher" href="/teacher/ID"><b style='font-size:16'>Name</b></a>
-  const re = /<a\s+class="talkteacher"\s+href="\/teacher\/(\d+)">\s*<b[^>]*>([\s\S]*?)<\/b>\s*<\/a>/g;
-  let m;
-  while ((m = re.exec(html)) !== null) {
-    teachers.push({
-      id: parseInt(m[1], 10),
-      name: decodeEntities(m[2].trim()),
-    });
-  }
-  return { teachers };
+  return { teachers: matches.slice(0, 20) };
 }
 
 export async function fetchTeacherTalks(
@@ -176,21 +210,82 @@ export async function fetchTeacherTalks(
 
 export async function fetchRetreatTalks(
   retreatId: number,
-  page: number
+  _page: number
 ): Promise<SearchResponse & { retreatTitle?: string }> {
-  const url = `${BASE}/retreats/${retreatId}/?sort=rec_date&page=${page}&page_items=100`;
+  const url = `https://dharmaseed.org/feeds/retreat/${retreatId}/`;
   const res = await fetch(url, {
     headers: { "User-Agent": "DharmaSeedPlayer/1.0" },
   });
-  if (!res.ok) throw new Error(`Retreat talks failed: ${res.status}`);
-  const html = await res.text();
-  const result = parseTalkList(html, page);
+  if (!res.ok) throw new Error(`Retreat RSS failed: ${res.status}`);
+  const xml = await res.text();
+  return parseRetreatRSS(xml, retreatId);
+}
 
-  // Extract retreat title from the page
-  const titleMatch = html.match(/<h2>([\s\S]*?)<\/h2>/);
-  const retreatTitle = titleMatch ? decodeEntities(titleMatch[1].trim()) : undefined;
+function parseRetreatRSS(
+  xml: string,
+  retreatId: number
+): SearchResponse & { retreatTitle?: string } {
+  // Extract retreat title from channel <title>, strip "(Dharma Seed: Retreat talks)" suffix
+  const channelTitleMatch = xml.match(/<channel>[\s\S]*?<title>([^<]+)<\/title>/);
+  let retreatTitle = channelTitleMatch ? channelTitleMatch[1].trim() : undefined;
+  if (retreatTitle) {
+    retreatTitle = retreatTitle.replace(/\s*\(Dharma Seed:.*?\)\s*$/, "").trim();
+  }
 
-  return { ...result, retreatTitle };
+  const items = xml.split(/<item>/);
+  items.shift(); // discard everything before first <item>
+
+  const seen = new Set<number>();
+  const talks: Talk[] = [];
+
+  for (const item of items) {
+    const link = rssText(item, "link");
+    const idMatch = link.match(/\/talks\/(\d+)/);
+    if (!idMatch) continue;
+    const id = parseInt(idMatch[1], 10);
+
+    if (seen.has(id)) continue;
+    seen.add(id);
+
+    const teacher = rssText(item, "itunes:author");
+
+    let title = rssText(item, "title");
+    const colonIdx = title.indexOf(": ");
+    if (colonIdx > 0 && teacher && title.slice(0, colonIdx).includes(teacher)) {
+      title = title.slice(colonIdx + 2);
+    }
+
+    const durationStr = rssText(item, "itunes:duration");
+    const durationMinutes = durationStr ? parseDuration(durationStr) : 0;
+
+    const pubDate = rssText(item, "pubDate");
+    const date = parseRSSDate(pubDate);
+
+    let audioUrl = rssAttr(item, "enclosure", "url");
+    audioUrl = audioUrl.replace("//talks/", "/talks/").replace(/\?rss=$/, "");
+
+    talks.push({ id, title, teacher, durationMinutes, date, audioUrl, retreatId, retreatTitle });
+  }
+
+  return { talks, page: 1, hasMore: false, retreatTitle };
+}
+
+function rssText(xml: string, tag: string): string {
+  const re = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, "i");
+  const m = xml.match(re);
+  return m ? m[1].trim() : "";
+}
+
+function rssAttr(xml: string, tag: string, attr: string): string {
+  const re = new RegExp(`<${tag}[^>]*${attr}="([^"]*)"`, "i");
+  const m = xml.match(re);
+  return m ? m[1] : "";
+}
+
+function parseRSSDate(rfc2822: string): string {
+  const d = new Date(rfc2822);
+  if (isNaN(d.getTime())) return "";
+  return d.toISOString().slice(0, 10);
 }
 
 export async function fetchTalkDetail(
