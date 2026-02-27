@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { fetchRetreatTalks, fetchTalkDetail, searchTalks } from "../worker/dharmaseed.js";
+import {
+  fetchRetreatTalks,
+  fetchTalkDetail,
+  searchTalks,
+} from "../worker/dharmaseed.js";
 
 type FetchImpl = typeof fetch;
 
@@ -10,6 +14,11 @@ function mockFetch(fn: FetchImpl): () => void {
   return () => {
     globalThis.fetch = originalFetch;
   };
+}
+
+async function loadSearchTeachersFresh() {
+  const mod = await import(`../worker/dharmaseed.js?fresh=${Date.now()}-${Math.random()}`);
+  return mod.searchTeachers as (query: string) => Promise<{ teachers: Array<{ id: number; name: string }> }>;
 }
 
 test("searchTalks parses talk list HTML", async () => {
@@ -143,6 +152,98 @@ test("fetchTalkDetail returns cached talk after first request", async () => {
     assert.equal(first?.audioUrl, "https://www.dharmaseed.org/talks/99991/file.mp3");
     assert.equal(first?.durationMinutes, 13);
     assert.equal(callCount, 2);
+  } finally {
+    restore();
+  }
+});
+
+test("searchTeachers retries after an initial bootstrap failure", async () => {
+  const searchTeachers = await loadSearchTeachersFresh();
+  let listCalls = 0;
+  const restore = mockFetch(async (input, init) => {
+    const url = String(input);
+    if (!url.endsWith("/api/1/teachers/")) {
+      return new Response(null, { status: 404 });
+    }
+
+    const body = init?.body instanceof URLSearchParams ? init.body : new URLSearchParams();
+    const detail = body.get("detail");
+    if (detail === "0") {
+      listCalls += 1;
+      if (listCalls === 1) {
+        throw new Error("transient error");
+      }
+      return Response.json({ items: [123] });
+    }
+
+    if (detail === "1") {
+      return Response.json({
+        items: {
+          "123": { name: "Ada Lovelace" },
+        },
+      });
+    }
+
+    return new Response(null, { status: 400 });
+  });
+
+  try {
+    await assert.rejects(() => searchTeachers("ada"));
+    const result = await searchTeachers("ada");
+    assert.equal(listCalls, 2);
+    assert.deepEqual(result, {
+      teachers: [{ id: 123, name: "Ada Lovelace" }],
+    });
+  } finally {
+    restore();
+  }
+});
+
+test("searchTeachers does not cache partial teachers when a batch fails", async () => {
+  const searchTeachers = await loadSearchTeachersFresh();
+  const teacherIds = Array.from({ length: 501 }, (_, idx) => idx + 1);
+  let batch2Attempts = 0;
+
+  const restore = mockFetch(async (input, init) => {
+    const url = String(input);
+    if (!url.endsWith("/api/1/teachers/")) {
+      return new Response(null, { status: 404 });
+    }
+
+    const body = init?.body instanceof URLSearchParams ? init.body : new URLSearchParams();
+    const detail = body.get("detail");
+
+    if (detail === "0") {
+      return Response.json({ items: teacherIds });
+    }
+
+    if (detail === "1") {
+      const items = (body.get("items") || "").split(",").map((v) => parseInt(v, 10));
+      const isBatch2 = items.length === 1 && items[0] === 501;
+      if (isBatch2) {
+        batch2Attempts += 1;
+        if (batch2Attempts === 1) {
+          return new Response("fail", { status: 500 });
+        }
+      }
+
+      const payload: Record<string, { name: string }> = {};
+      for (const id of items) {
+        payload[String(id)] = { name: `Teacher ${id}` };
+      }
+      return Response.json({ items: payload });
+    }
+
+    return new Response(null, { status: 400 });
+  });
+
+  try {
+    await assert.rejects(() => searchTeachers("teacher 501"));
+    const result = await searchTeachers("teacher 501");
+    assert.equal(batch2Attempts, 2);
+    assert.deepEqual(result, {
+      teachers: [{ id: 501, name: "Teacher 501" }],
+    });
   } finally {
     restore();
   }

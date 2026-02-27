@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch server.ts",
-    "test": "tsx --test --test-concurrency=1 tests/**/*.test.ts"
+    "test": "tsx --test --test-concurrency=1 $(find tests -name '*.test.ts' -print)"
   },
   "dependencies": {
     "hono": "^4.0.0",

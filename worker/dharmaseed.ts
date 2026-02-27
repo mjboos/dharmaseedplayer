@@ -118,46 +118,51 @@ async function loadAllTeachers(): Promise<Teacher[]> {
   if (teacherListLoading) return teacherListLoading;
 
   teacherListLoading = (async () => {
-    // Step 1: Get all teacher IDs
-    const idsBody = new URLSearchParams({ detail: "0" });
-    const idsRes = await fetch(`${BASE}/api/1/teachers/`, {
-      method: "POST",
-      body: idsBody,
-      headers: { "User-Agent": "DharmaSeedPlayer/1.0" },
-    });
-    if (!idsRes.ok) throw new Error(`Teacher list failed: ${idsRes.status}`);
-    const idsJson = (await idsRes.json()) as { items?: number[] };
-    const ids = idsJson.items || [];
-
-    // Step 2: Batch fetch teacher details (500 at a time)
-    const teachers: Teacher[] = [];
-    for (let i = 0; i < ids.length; i += 500) {
-      const batch = ids.slice(i, i + 500);
-      const body = new URLSearchParams({
-        detail: "1",
-        items: batch.join(","),
-      });
-      const res = await fetch(`${BASE}/api/1/teachers/`, {
+    try {
+      // Step 1: Get all teacher IDs
+      const idsBody = new URLSearchParams({ detail: "0" });
+      const idsRes = await fetch(`${BASE}/api/1/teachers/`, {
         method: "POST",
-        body,
+        body: idsBody,
         headers: { "User-Agent": "DharmaSeedPlayer/1.0" },
       });
-      if (!res.ok) continue;
-      const json = (await res.json()) as {
-        items?: Record<string, { name?: string }>;
-      };
-      if (json.items) {
-        for (const [idStr, data] of Object.entries(json.items)) {
-          if (data.name) {
-            teachers.push({ id: parseInt(idStr, 10), name: data.name });
+      if (!idsRes.ok) throw new Error(`Teacher list failed: ${idsRes.status}`);
+      const idsJson = (await idsRes.json()) as { items?: number[] };
+      const ids = idsJson.items || [];
+
+      // Step 2: Batch fetch teacher details (500 at a time)
+      const teachers: Teacher[] = [];
+      for (let i = 0; i < ids.length; i += 500) {
+        const batch = ids.slice(i, i + 500);
+        const body = new URLSearchParams({
+          detail: "1",
+          items: batch.join(","),
+        });
+        const res = await fetch(`${BASE}/api/1/teachers/`, {
+          method: "POST",
+          body,
+          headers: { "User-Agent": "DharmaSeedPlayer/1.0" },
+        });
+        if (!res.ok) {
+          throw new Error(`Teacher detail batch failed: ${res.status}`);
+        }
+        const json = (await res.json()) as {
+          items?: Record<string, { name?: string }>;
+        };
+        if (json.items) {
+          for (const [idStr, data] of Object.entries(json.items)) {
+            if (data.name) {
+              teachers.push({ id: parseInt(idStr, 10), name: data.name });
+            }
           }
         }
       }
-    }
 
-    allTeachers = teachers;
-    teacherListLoading = null;
-    return teachers;
+      allTeachers = teachers;
+      return teachers;
+    } finally {
+      teacherListLoading = null;
+    }
   })();
 
   return teacherListLoading;
