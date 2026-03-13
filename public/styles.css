@@ -493,6 +493,27 @@ header h1 {
   white-space: nowrap;
 }
 
+/* Donation note */
+#donation-note {
+  margin: 16px 16px 0;
+  padding: 12px 16px;
+  background: #f8faf6;
+  border: 1px solid #d4e5ca;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: #555;
+  line-height: 1.5;
+}
+
+#donation-note a {
+  color: #2d5016;
+  font-weight: 500;
+}
+
+#donation-note a:hover {
+  color: #3d6b20;
+}
+
 /* Loading state */
 .loading {
   text-align: center;
