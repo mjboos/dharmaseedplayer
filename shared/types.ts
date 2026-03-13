@@ -28,3 +28,13 @@ export interface Teacher {
 export interface TeacherSearchResponse {
   teachers: Teacher[];
 }
+
+export interface Retreat {
+  id: number;
+  name: string;
+  date: string;
+}
+
+export interface TeacherRetreatsResponse {
+  retreats: Retreat[];
+}

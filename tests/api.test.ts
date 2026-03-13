@@ -46,3 +46,9 @@ test("GET /api/teachers/:id/talks validates numeric id", async () => {
   assert.equal(res.status, 400);
   assert.deepEqual(await res.json(), { error: "Invalid teacher ID" });
 });
+
+test("GET /api/teachers/:id/retreats validates numeric id", async () => {
+  const res = await app.request("/api/teachers/abc/retreats");
+  assert.equal(res.status, 400);
+  assert.deepEqual(await res.json(), { error: "Invalid teacher ID" });
+});

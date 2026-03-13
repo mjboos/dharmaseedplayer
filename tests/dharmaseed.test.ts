@@ -4,6 +4,7 @@ import {
   fetchRetreatTalks,
   fetchTalkDetail,
   searchTalks,
+  parseTeacherRetreats,
 } from "../worker/dharmaseed.js";
 
 type FetchImpl = typeof fetch;
@@ -197,6 +198,33 @@ test("searchTeachers retries after an initial bootstrap failure", async () => {
   } finally {
     restore();
   }
+});
+
+test("parseTeacherRetreats extracts retreats from teacher page HTML", () => {
+  const html = `
+    <html>
+    <select id='teacher_retreat_selector' class="select2" style='width: 300px;'>
+    <option value="#">-- Select one of Teacher's 3 retreats --</option>
+    <option value="/retreats/42/">2024-01-15
+        Spring Retreat</option>
+    <option value="/retreats/99/">2023-06-01
+        Summer &amp; Fall Intensive</option>
+    <option value="/retreats/7/">1900-01-01
+        Monday Talks</option>
+    </select>
+    </html>
+  `;
+
+  const retreats = parseTeacherRetreats(html);
+  assert.equal(retreats.length, 3);
+  assert.deepEqual(retreats[0], { id: 42, date: "2024-01-15", name: "Spring Retreat" });
+  assert.deepEqual(retreats[1], { id: 99, date: "2023-06-01", name: "Summer & Fall Intensive" });
+  assert.deepEqual(retreats[2], { id: 7, date: "1900-01-01", name: "Monday Talks" });
+});
+
+test("parseTeacherRetreats returns empty array when no select found", () => {
+  const retreats = parseTeacherRetreats("<html><body>No retreats here</body></html>");
+  assert.deepEqual(retreats, []);
 });
 
 test("searchTeachers does not cache partial teachers when a batch fails", async () => {

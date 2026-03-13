@@ -23,6 +23,12 @@ export async function getTeacherTalks(teacherId, page = 1, query = "") {
   return res.json();
 }
 
+export async function getTeacherRetreats(teacherId) {
+  const res = await fetch(`/api/teachers/${teacherId}/retreats`);
+  if (!res.ok) throw new Error("Failed to fetch teacher retreats");
+  return res.json();
+}
+
 export async function getRetreatTalks(retreatId, page = 1) {
   const res = await fetch(`/api/retreats/${retreatId}/talks?page=${page}`);
   if (!res.ok) throw new Error("Failed to fetch retreat talks");
