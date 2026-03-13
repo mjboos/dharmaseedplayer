@@ -222,7 +222,7 @@ export async function fetchTeacherRetreats(
 
 export function parseTeacherRetreats(html: string): Retreat[] {
   const retreats: Retreat[] = [];
-  const optionRe = /<option\s+value="\/retreats\/(\d+)\/">([\s\S]*?)<\/option>/g;
+  const optionRe = /<option\s+value="\/retreats\/(\d+)\/?">([\s\S]*?)<\/option>/g;
   let match;
   while ((match = optionRe.exec(html)) !== null) {
     const id = parseInt(match[1], 10);
