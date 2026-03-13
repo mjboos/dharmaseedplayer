@@ -235,6 +235,7 @@ export function parseTeacherRetreats(html: string): Retreat[] {
       retreats.push({ id, date: "", name: decodeEntities(text) });
     }
   }
+  retreats.reverse();
   return retreats;
 }
 

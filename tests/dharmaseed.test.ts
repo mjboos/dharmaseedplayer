@@ -217,9 +217,9 @@ test("parseTeacherRetreats extracts retreats from teacher page HTML", () => {
 
   const retreats = parseTeacherRetreats(html);
   assert.equal(retreats.length, 3);
-  assert.deepEqual(retreats[0], { id: 42, date: "2024-01-15", name: "Spring Retreat" });
+  assert.deepEqual(retreats[0], { id: 7, date: "1900-01-01", name: "Monday Talks" });
   assert.deepEqual(retreats[1], { id: 99, date: "2023-06-01", name: "Summer & Fall Intensive" });
-  assert.deepEqual(retreats[2], { id: 7, date: "1900-01-01", name: "Monday Talks" });
+  assert.deepEqual(retreats[2], { id: 42, date: "2024-01-15", name: "Spring Retreat" });
 });
 
 test("parseTeacherRetreats returns empty array when no select found", () => {
