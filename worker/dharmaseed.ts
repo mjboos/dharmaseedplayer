@@ -1,4 +1,4 @@
-import type { Talk, TalkDetail, SearchResponse, Teacher, TeacherSearchResponse } from "../shared/types.js";
+import type { Talk, TalkDetail, SearchResponse, Teacher, TeacherSearchResponse, Retreat, TeacherRetreatsResponse } from "../shared/types.js";
 
 const BASE = "https://www.dharmaseed.org";
 
@@ -206,6 +206,37 @@ export async function fetchTeacherTalks(
   }
 
   return result;
+}
+
+export async function fetchTeacherRetreats(
+  teacherId: number
+): Promise<TeacherRetreatsResponse> {
+  const url = `${BASE}/teacher/${teacherId}/`;
+  const res = await fetch(url, {
+    headers: { "User-Agent": "DharmaSeedPlayer/1.0" },
+  });
+  if (!res.ok) throw new Error(`Teacher page failed: ${res.status}`);
+  const html = await res.text();
+  return { retreats: parseTeacherRetreats(html) };
+}
+
+export function parseTeacherRetreats(html: string): Retreat[] {
+  const retreats: Retreat[] = [];
+  const optionRe = /<option\s+value="\/retreats\/(\d+)\/?">([\s\S]*?)<\/option>/g;
+  let match;
+  while ((match = optionRe.exec(html)) !== null) {
+    const id = parseInt(match[1], 10);
+    const text = match[2].replace(/\s+/g, " ").trim();
+    // Text format: "YYYY-MM-DD Retreat Name"
+    const dateMatch = text.match(/^(\d{4}-\d{2}-\d{2})\s+(.*)/);
+    if (dateMatch) {
+      retreats.push({ id, date: dateMatch[1], name: decodeEntities(dateMatch[2]) });
+    } else {
+      retreats.push({ id, date: "", name: decodeEntities(text) });
+    }
+  }
+  retreats.reverse();
+  return retreats;
 }
 
 export async function fetchRetreatTalks(

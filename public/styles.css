@@ -121,6 +121,58 @@ header h1 {
   cursor: pointer;
 }
 
+.teacher-retreats {
+  margin-bottom: 12px;
+}
+
+.teacher-retreats-label {
+  font-size: 0.85rem;
+  color: #2d5016;
+  cursor: pointer;
+  font-weight: 500;
+  padding: 8px 0;
+}
+
+.teacher-retreats-label::before {
+  content: "\25b6 ";
+  font-size: 0.7rem;
+}
+
+.teacher-retreats.expanded .teacher-retreats-label::before {
+  content: "\25bc ";
+}
+
+.teacher-retreats-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 8px;
+}
+
+.retreat-chip {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: #333;
+}
+
+.retreat-chip:hover {
+  border-color: #2d5016;
+  background: #f8faf6;
+}
+
+.retreat-chip-date {
+  color: #888;
+  font-size: 0.8rem;
+  margin-right: 4px;
+}
+
 .retreat-page-header {
   margin-bottom: 12px;
   display: flex;

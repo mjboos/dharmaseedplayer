@@ -1,4 +1,4 @@
-import { searchTalks, searchTeachers, getTeacherTalks, getRetreatTalks } from "./api.js";
+import { searchTalks, searchTeachers, getTeacherTalks, getTeacherRetreats, getRetreatTalks } from "./api.js";
 import { getPositionForTalk, formatTime } from "./player.js";
 
 let currentQuery = "";
@@ -170,6 +170,8 @@ async function loadTeacherTalks(teacherId, clear) {
   if (clear) {
     resultsEl.innerHTML = "";
     resultsEl.appendChild(renderTeacherHeader(activeTeacherName));
+    // Load retreats in background (only on initial teacher load)
+    loadTeacherRetreats(teacherId);
   }
   resultsEl.insertAdjacentHTML("beforeend", '<div class="loading">Loading...</div>');
 
@@ -193,6 +195,44 @@ async function loadTeacherTalks(teacherId, clear) {
     resultsEl.insertAdjacentHTML("beforeend", '<div class="empty-state">Failed to load teacher talks.</div>');
   } finally {
     loading = false;
+  }
+}
+
+async function loadTeacherRetreats(teacherId) {
+  try {
+    const result = await getTeacherRetreats(teacherId);
+    if (!result.retreats || result.retreats.length === 0) return;
+
+    const header = resultsEl.querySelector(".teacher-page-header");
+    if (!header) return;
+
+    const section = document.createElement("div");
+    section.className = "teacher-retreats";
+    section.innerHTML = `<div class="teacher-retreats-label">Retreats (${result.retreats.length})</div>`;
+
+    const list = document.createElement("div");
+    list.className = "teacher-retreats-list";
+    list.hidden = true;
+
+    for (const retreat of result.retreats) {
+      const btn = document.createElement("button");
+      btn.className = "retreat-chip";
+      btn.innerHTML = `<span class="retreat-chip-date">${esc(retreat.date)}</span> ${esc(retreat.name)}`;
+      btn.addEventListener("click", () => {
+        openRetreat(retreat.id, retreat.name);
+      });
+      list.appendChild(btn);
+    }
+
+    section.querySelector(".teacher-retreats-label").addEventListener("click", () => {
+      list.hidden = !list.hidden;
+      section.classList.toggle("expanded");
+    });
+
+    section.appendChild(list);
+    header.after(section);
+  } catch (err) {
+    // Silently ignore — retreats are supplementary
   }
 }
 

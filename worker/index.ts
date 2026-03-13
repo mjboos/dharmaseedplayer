@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { searchTalks, fetchTalkDetail, searchTeachers, fetchTeacherTalks, fetchRetreatTalks } from "./dharmaseed.js";
+import { searchTalks, fetchTalkDetail, searchTeachers, fetchTeacherTalks, fetchTeacherRetreats, fetchRetreatTalks } from "./dharmaseed.js";
 
 export const app = new Hono();
 
@@ -47,6 +47,20 @@ app.get("/api/teachers/:id/talks", async (c) => {
   } catch (e) {
     console.error("Teacher talks failed:", e);
     return c.json({ error: "Failed to fetch teacher talks" }, 500);
+  }
+});
+
+app.get("/api/teachers/:id/retreats", async (c) => {
+  const id = parseInt(c.req.param("id"), 10);
+  if (isNaN(id)) {
+    return c.json({ error: "Invalid teacher ID" }, 400);
+  }
+  try {
+    const result = await fetchTeacherRetreats(id);
+    return c.json(result);
+  } catch (e) {
+    console.error("Teacher retreats failed:", e);
+    return c.json({ error: "Failed to fetch teacher retreats" }, 500);
   }
 });
 
