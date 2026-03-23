@@ -355,6 +355,61 @@ header h1 {
   font-size: 1rem;
 }
 
+#playlist-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+#playlist-select {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  background: white;
+}
+
+#new-playlist-btn {
+  background: #2d5016;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+#new-playlist-btn:hover {
+  background: #3d6b20;
+}
+
+#rename-playlist-btn,
+#delete-playlist-btn {
+  background: none;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  white-space: nowrap;
+  color: #666;
+}
+
+#delete-playlist-btn:hover {
+  border-color: #c00;
+  color: #c00;
+}
+
+#rename-playlist-btn:hover {
+  border-color: #2d5016;
+  color: #2d5016;
+}
+
 #queue-close {
   background: none;
   border: none;

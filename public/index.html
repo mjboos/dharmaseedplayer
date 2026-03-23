@@ -39,7 +39,12 @@
 
   <div id="queue-panel" class="hidden">
     <div id="queue-header">
-      <h2>Queue</h2>
+      <div id="playlist-controls">
+        <select id="playlist-select"></select>
+        <button id="new-playlist-btn" title="New playlist">+</button>
+        <button id="rename-playlist-btn" title="Rename playlist" hidden>Rename</button>
+        <button id="delete-playlist-btn" title="Delete playlist" hidden>Delete</button>
+      </div>
       <button id="queue-close">&times;</button>
     </div>
     <div id="queue-list"></div>
