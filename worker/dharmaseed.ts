@@ -298,6 +298,8 @@ function parseRetreatRSS(
     talks.push({ id, title, teacher, durationMinutes, date, audioUrl, retreatId, retreatTitle });
   }
 
+  talks.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+
   return { talks, page: 1, hasMore: false, retreatTitle };
 }
 
