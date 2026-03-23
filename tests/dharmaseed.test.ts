@@ -105,6 +105,56 @@ test("fetchRetreatTalks parses RSS and removes duplicate talks", async () => {
   }
 });
 
+test("fetchRetreatTalks sorts talks by date descending", async () => {
+  const xml = `
+    <rss>
+      <channel>
+        <title>Meditation Retreat (Dharma Seed: Retreat talks)</title>
+        <item>
+          <link>https://dharmaseed.org/talks/101/</link>
+          <title>Teacher A: Middle Talk</title>
+          <itunes:author>Teacher A</itunes:author>
+          <itunes:duration>0:30:00</itunes:duration>
+          <pubDate>Wed, 15 Jan 2025 12:00:00 GMT</pubDate>
+          <enclosure url="https://dharmaseed.org/talks/101/file.mp3" />
+        </item>
+        <item>
+          <link>https://dharmaseed.org/talks/102/</link>
+          <title>Teacher A: Newest Talk</title>
+          <itunes:author>Teacher A</itunes:author>
+          <itunes:duration>0:45:00</itunes:duration>
+          <pubDate>Fri, 17 Jan 2025 12:00:00 GMT</pubDate>
+          <enclosure url="https://dharmaseed.org/talks/102/file.mp3" />
+        </item>
+        <item>
+          <link>https://dharmaseed.org/talks/103/</link>
+          <title>Teacher A: Oldest Talk</title>
+          <itunes:author>Teacher A</itunes:author>
+          <itunes:duration>1:00:00</itunes:duration>
+          <pubDate>Mon, 13 Jan 2025 12:00:00 GMT</pubDate>
+          <enclosure url="https://dharmaseed.org/talks/103/file.mp3" />
+        </item>
+      </channel>
+    </rss>
+  `;
+
+  const restore = mockFetch(async () => new Response(xml, { status: 200 }));
+
+  try {
+    const result = await fetchRetreatTalks(55, 1);
+    assert.equal(result.talks.length, 3);
+    // Should be sorted newest first
+    assert.equal(result.talks[0].date, "2025-01-17");
+    assert.equal(result.talks[0].title, "Newest Talk");
+    assert.equal(result.talks[1].date, "2025-01-15");
+    assert.equal(result.talks[1].title, "Middle Talk");
+    assert.equal(result.talks[2].date, "2025-01-13");
+    assert.equal(result.talks[2].title, "Oldest Talk");
+  } finally {
+    restore();
+  }
+});
+
 test("fetchTalkDetail returns cached talk after first request", async () => {
   let callCount = 0;
   const restore = mockFetch(async (input, init) => {
