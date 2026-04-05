@@ -39,14 +39,20 @@
 
   <div id="queue-panel" class="hidden">
     <div id="queue-header">
-      <div id="playlist-controls">
-        <select id="playlist-select"></select>
-        <button id="new-playlist-btn" title="New playlist">+</button>
-        <button id="rename-playlist-btn" title="Rename playlist" hidden>Rename</button>
-        <button id="delete-playlist-btn" title="Delete playlist" hidden>Delete</button>
-      </div>
+      <button id="playlist-switch-btn" title="Switch playlist">
+        <span id="playlist-active-name">Queue</span>
+        <span class="playlist-switch-arrow">&#9662;</span>
+      </button>
       <button id="queue-close">&times;</button>
     </div>
+
+    <!-- Playlist picker view -->
+    <div id="playlist-picker" class="hidden">
+      <div id="playlist-picker-list"></div>
+      <button id="new-playlist-btn">+ New Playlist</button>
+    </div>
+
+    <!-- Talk list view -->
     <div id="queue-list"></div>
   </div>
 
