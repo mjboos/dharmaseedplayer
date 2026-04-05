@@ -7,54 +7,49 @@ const countEl = document.getElementById("queue-count");
 const panel = document.getElementById("queue-panel");
 const toggleBtn = document.getElementById("queue-btn");
 const closeBtn = document.getElementById("queue-close");
-const playlistSelect = document.getElementById("playlist-select");
+const switchBtn = document.getElementById("playlist-switch-btn");
+const activeNameEl = document.getElementById("playlist-active-name");
+const picker = document.getElementById("playlist-picker");
+const pickerList = document.getElementById("playlist-picker-list");
 const newPlaylistBtn = document.getElementById("new-playlist-btn");
-const deletePlaylistBtn = document.getElementById("delete-playlist-btn");
-const renamePlaylistBtn = document.getElementById("rename-playlist-btn");
 
 let onPlayCallback = null;
 
-toggleBtn.addEventListener("click", () => panel.classList.toggle("hidden"));
+toggleBtn.addEventListener("click", () => {
+  panel.classList.toggle("hidden");
+  // Always start on the talk list view, not the picker
+  picker.classList.add("hidden");
+  listEl.classList.remove("hidden");
+});
 closeBtn.addEventListener("click", () => panel.classList.add("hidden"));
+
+// Toggle between picker and talk list
+switchBtn.addEventListener("click", () => {
+  const showingPicker = !picker.classList.contains("hidden");
+  if (showingPicker) {
+    picker.classList.add("hidden");
+    listEl.classList.remove("hidden");
+  } else {
+    renderPicker();
+    picker.classList.remove("hidden");
+    listEl.classList.add("hidden");
+  }
+});
 
 newPlaylistBtn.addEventListener("click", () => {
   const name = prompt("Playlist name:");
   if (!name || !name.trim()) return;
   const id = store.createPlaylist(name.trim());
   store.setActivePlaylist(id);
-  renderPlaylistSelector();
-  render();
-});
-
-deletePlaylistBtn.addEventListener("click", () => {
-  const id = store.getActivePlaylistId();
-  if (id === "queue") return;
-  const pl = store.getPlaylist(id);
-  if (!confirm(`Delete "${pl.name}"?`)) return;
-  store.deletePlaylist(id);
-  renderPlaylistSelector();
-  render();
-});
-
-renamePlaylistBtn.addEventListener("click", () => {
-  const id = store.getActivePlaylistId();
-  if (id === "queue") return;
-  const pl = store.getPlaylist(id);
-  const name = prompt("New name:", pl.name);
-  if (!name || !name.trim()) return;
-  store.renamePlaylist(id, name.trim());
-  renderPlaylistSelector();
-});
-
-playlistSelect.addEventListener("change", () => {
-  store.setActivePlaylist(playlistSelect.value);
-  updatePlaylistActions();
+  picker.classList.add("hidden");
+  listEl.classList.remove("hidden");
+  updateHeader();
   render();
 });
 
 export function initQueue({ onPlay }) {
   onPlayCallback = onPlay;
-  renderPlaylistSelector();
+  updateHeader();
   render();
 }
 
@@ -91,25 +86,10 @@ export function getPlaylists() {
   return store.getPlaylists();
 }
 
-function renderPlaylistSelector() {
-  const playlists = store.getPlaylists();
-  const activeId = store.getActivePlaylistId();
-  playlistSelect.innerHTML = "";
-  for (const pl of playlists) {
-    const opt = document.createElement("option");
-    opt.value = pl.id;
-    opt.textContent = pl.name + (pl.talks.length > 0 ? ` (${pl.talks.length})` : "");
-    opt.selected = pl.id === activeId;
-    playlistSelect.appendChild(opt);
-  }
-  updatePlaylistActions();
+function updateHeader() {
+  const pl = store.getPlaylist(store.getActivePlaylistId());
+  activeNameEl.textContent = pl ? pl.name : "Queue";
   updateToggleCount();
-}
-
-function updatePlaylistActions() {
-  const isDefault = store.getActivePlaylistId() === "queue";
-  deletePlaylistBtn.hidden = isDefault;
-  renamePlaylistBtn.hidden = isDefault;
 }
 
 function updateToggleCount() {
@@ -117,11 +97,73 @@ function updateToggleCount() {
   countEl.textContent = String(total);
 }
 
+function renderPicker() {
+  const playlists = store.getPlaylists();
+  const activeId = store.getActivePlaylistId();
+  pickerList.innerHTML = "";
+
+  for (const pl of playlists) {
+    const el = document.createElement("div");
+    el.className = "playlist-picker-item" + (pl.id === activeId ? " active" : "");
+
+    const btn = document.createElement("button");
+    btn.className = "playlist-picker-btn";
+    btn.innerHTML = `
+      <span class="playlist-picker-name">${esc(pl.name)}</span>
+      <span class="playlist-picker-count">${pl.talks.length} talk${pl.talks.length !== 1 ? "s" : ""}</span>
+    `;
+    btn.addEventListener("click", () => {
+      store.setActivePlaylist(pl.id);
+      picker.classList.add("hidden");
+      listEl.classList.remove("hidden");
+      updateHeader();
+      render();
+    });
+    el.appendChild(btn);
+
+    // Actions for custom playlists (not queue)
+    if (pl.id !== "queue") {
+      const actions = document.createElement("div");
+      actions.className = "playlist-picker-actions";
+
+      const renameBtn = document.createElement("button");
+      renameBtn.className = "playlist-action-btn";
+      renameBtn.textContent = "Rename";
+      renameBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const name = prompt("New name:", pl.name);
+        if (!name || !name.trim()) return;
+        store.renamePlaylist(pl.id, name.trim());
+        updateHeader();
+        renderPicker();
+      });
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.className = "playlist-action-btn delete";
+      deleteBtn.textContent = "Delete";
+      deleteBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (!confirm(`Delete "${pl.name}"?`)) return;
+        store.deletePlaylist(pl.id);
+        updateHeader();
+        renderPicker();
+        render();
+      });
+
+      actions.appendChild(renameBtn);
+      actions.appendChild(deleteBtn);
+      el.appendChild(actions);
+    }
+
+    pickerList.appendChild(el);
+  }
+}
+
 function render() {
   const activeId = store.getActivePlaylistId();
   const talks = store.getAll(activeId);
   updateToggleCount();
-  renderPlaylistSelector();
+  updateHeader();
 
   if (talks.length === 0) {
     listEl.innerHTML = '<div class="empty-state">Playlist is empty</div>';
