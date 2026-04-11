@@ -119,7 +119,8 @@ async function doSearch(clear = true) {
           loading = false;
           resultsEl.innerHTML = "";
           loadMoreBtn.hidden = true;
-          loadTeacherTalks(teacher.id, true);
+          resultsEl.appendChild(renderTeacherHeader(activeTeacherName));
+          loadTeacherRetreats(teacher.id);
         });
         teacherSection.appendChild(chip);
       }
@@ -182,8 +183,6 @@ async function loadTeacherTalks(teacherId, clear) {
   if (clear) {
     resultsEl.innerHTML = "";
     resultsEl.appendChild(renderTeacherHeader(activeTeacherName));
-    // Load retreats in background (only on initial teacher load)
-    loadTeacherRetreats(teacherId);
   }
   resultsEl.insertAdjacentHTML("beforeend", '<div class="loading">Loading...</div>');
 
@@ -215,20 +214,35 @@ async function loadTeacherTalks(teacherId, clear) {
 }
 
 async function loadTeacherRetreats(teacherId) {
+  if (loading) return;
+  const myVersion = viewVersion;
+  loading = true;
+
+  resultsEl.insertAdjacentHTML("beforeend", '<div class="loading">Loading...</div>');
+
   try {
     const result = await getTeacherRetreats(teacherId);
-    if (!result.retreats || result.retreats.length === 0) return;
+
+    if (myVersion !== viewVersion) return;
+
+    resultsEl.querySelectorAll(".loading").forEach((el) => el.remove());
+
+    // Fall back to showing talks if teacher has no retreats
+    if (!result.retreats || result.retreats.length === 0) {
+      loading = false;
+      loadTeacherTalks(teacherId, false);
+      return;
+    }
 
     const header = resultsEl.querySelector(".teacher-page-header");
     if (!header) return;
 
     const section = document.createElement("div");
-    section.className = "teacher-retreats";
+    section.className = "teacher-retreats expanded";
     section.innerHTML = `<div class="teacher-retreats-label">Retreats (${result.retreats.length})</div>`;
 
     const list = document.createElement("div");
     list.className = "teacher-retreats-list";
-    list.hidden = true;
 
     for (const retreat of result.retreats) {
       const btn = document.createElement("button");
@@ -248,7 +262,11 @@ async function loadTeacherRetreats(teacherId) {
     section.appendChild(list);
     header.after(section);
   } catch (err) {
-    // Silently ignore — retreats are supplementary
+    if (myVersion !== viewVersion) return;
+    resultsEl.querySelectorAll(".loading").forEach((el) => el.remove());
+    resultsEl.insertAdjacentHTML("beforeend", '<div class="empty-state">Failed to load retreats.</div>');
+  } finally {
+    if (myVersion === viewVersion) loading = false;
   }
 }
 
