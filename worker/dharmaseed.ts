@@ -241,84 +241,27 @@ export function parseTeacherRetreats(html: string): Retreat[] {
 
 export async function fetchRetreatTalks(
   retreatId: number,
-  _page: number
+  page: number
 ): Promise<SearchResponse & { retreatTitle?: string }> {
-  const url = `https://dharmaseed.org/feeds/retreat/${retreatId}/`;
+  const url = `${BASE}/retreats/${retreatId}/?sort=-rec_date&page=${page}&page_items=25`;
   const res = await fetch(url, {
     headers: { "User-Agent": "DharmaSeedPlayer/1.0" },
   });
-  if (!res.ok) throw new Error(`Retreat RSS failed: ${res.status}`);
-  const xml = await res.text();
-  return parseRetreatRSS(xml, retreatId);
-}
+  if (!res.ok) throw new Error(`Retreat page failed: ${res.status}`);
+  const html = await res.text();
+  const result = parseTalkList(html, page);
 
-function parseRetreatRSS(
-  xml: string,
-  retreatId: number
-): SearchResponse & { retreatTitle?: string } {
-  // Extract retreat title from channel <title>, strip "(Dharma Seed: Retreat talks)" suffix
-  const channelTitleMatch = xml.match(/<channel>[\s\S]*?<title>([^<]+)<\/title>/);
-  let retreatTitle = channelTitleMatch ? channelTitleMatch[1].trim() : undefined;
-  if (retreatTitle) {
-    retreatTitle = retreatTitle.replace(/\s*\(Dharma Seed:.*?\)\s*$/, "").trim();
+  // Extract retreat title from <h2> on the page
+  const h2Match = html.match(/<h2>([^<]+)<\/h2>/);
+  const retreatTitle = h2Match ? decodeEntities(h2Match[1].trim()) : undefined;
+
+  // Tag each talk with retreat info
+  for (const talk of result.talks) {
+    talk.retreatId = retreatId;
+    if (retreatTitle) talk.retreatTitle = retreatTitle;
   }
 
-  const items = xml.split(/<item>/);
-  items.shift(); // discard everything before first <item>
-
-  const seen = new Set<number>();
-  const talks: Talk[] = [];
-
-  for (const item of items) {
-    const link = rssText(item, "link");
-    const idMatch = link.match(/\/talks\/(\d+)/);
-    if (!idMatch) continue;
-    const id = parseInt(idMatch[1], 10);
-
-    if (seen.has(id)) continue;
-    seen.add(id);
-
-    const teacher = rssText(item, "itunes:author");
-
-    let title = rssText(item, "title");
-    const colonIdx = title.indexOf(": ");
-    if (colonIdx > 0 && teacher && title.slice(0, colonIdx).includes(teacher)) {
-      title = title.slice(colonIdx + 2);
-    }
-
-    const durationStr = rssText(item, "itunes:duration");
-    const durationMinutes = durationStr ? parseDuration(durationStr) : 0;
-
-    const pubDate = rssText(item, "pubDate");
-    const date = parseRSSDate(pubDate);
-
-    let audioUrl = rssAttr(item, "enclosure", "url");
-    audioUrl = audioUrl.replace("//talks/", "/talks/").replace(/\?rss=$/, "");
-
-    talks.push({ id, title, teacher, durationMinutes, date, audioUrl, retreatId, retreatTitle });
-  }
-
-  talks.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
-
-  return { talks, page: 1, hasMore: false, retreatTitle };
-}
-
-function rssText(xml: string, tag: string): string {
-  const re = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, "i");
-  const m = xml.match(re);
-  return m ? m[1].trim() : "";
-}
-
-function rssAttr(xml: string, tag: string, attr: string): string {
-  const re = new RegExp(`<${tag}[^>]*${attr}="([^"]*)"`, "i");
-  const m = xml.match(re);
-  return m ? m[1] : "";
-}
-
-function parseRSSDate(rfc2822: string): string {
-  const d = new Date(rfc2822);
-  if (isNaN(d.getTime())) return "";
-  return d.toISOString().slice(0, 10);
+  return { ...result, retreatTitle };
 }
 
 export async function fetchTalkDetail(
