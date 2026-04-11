@@ -277,7 +277,7 @@ function renderRetreatHeader(retreatName) {
   header.className = "retreat-page-header";
   header.innerHTML = `
     <div class="retreat-page-name">${esc(retreatName)}</div>
-    <button class="queue-all-btn">Add all to queue</button>
+    <button class="queue-all-btn">Add all to "${esc(document.getElementById("playlist-active-name")?.textContent || "Queue")}"</button>
   `;
   header.querySelector(".queue-all-btn").addEventListener("click", () => {
     const talkEls = resultsEl.querySelectorAll(".talk-item");
@@ -367,7 +367,7 @@ function renderTalk(talk) {
     <div class="talk-actions">
       <button class="play-btn">Play</button>
       ${savedPos > 0 ? `<button class="resume-btn">Resume ${formatTime(savedPos)}</button>` : ""}
-      <button class="queue-btn">+ Queue</button>
+      <button class="queue-btn">+ ${esc(document.getElementById("playlist-active-name")?.textContent || "Queue")}</button>
     </div>
   `;
   el.querySelector(".play-btn").addEventListener("click", () => playHandler(talk, 0));
