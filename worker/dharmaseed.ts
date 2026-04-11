@@ -243,7 +243,7 @@ export async function fetchRetreatTalks(
   retreatId: number,
   page: number
 ): Promise<SearchResponse & { retreatTitle?: string }> {
-  const url = `${BASE}/retreats/${retreatId}/?sort=-rec_date&page=${page}&page_items=25`;
+  const url = `${BASE}/retreats/${retreatId}/?sort=rec_date&page=${page}&page_items=25`;
   const res = await fetch(url, {
     headers: { "User-Agent": "DharmaSeedPlayer/1.0" },
   });
