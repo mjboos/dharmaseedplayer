@@ -9,6 +9,7 @@ let activeRetreatId = null;
 let activeRetreatName = "";
 let teacherQuery = "";
 let loading = false;
+let viewVersion = 0;
 let playHandler = null;
 let queueHandler = null;
 let queueAddAllHandler = null;
@@ -31,6 +32,8 @@ export function initSearch({ onPlay, onQueue, onQueueAll }) {
     currentPage = 1;
     activeTeacherId = null;
     activeRetreatId = null;
+    viewVersion++;
+    loading = false;
     resultsEl.innerHTML = "";
     loadMoreBtn.hidden = true;
     doSearch();
@@ -75,6 +78,7 @@ export function refreshResumeButtons() {
 
 async function doSearch(clear = true) {
   if (loading) return;
+  const myVersion = viewVersion;
   loading = true;
 
   if (clear) {
@@ -91,6 +95,8 @@ async function doSearch(clear = true) {
     }
 
     const [talkResult, teacherResult] = await Promise.all(promises);
+
+    if (myVersion !== viewVersion) return;
 
     resultsEl.querySelectorAll(".loading").forEach((el) => el.remove());
 
@@ -109,9 +115,12 @@ async function doSearch(clear = true) {
           activeRetreatId = null;
           teacherQuery = "";
           currentPage = 1;
+          viewVersion++;
+          loading = false;
           resultsEl.innerHTML = "";
           loadMoreBtn.hidden = true;
-          loadTeacherTalks(teacher.id, true);
+          resultsEl.appendChild(renderTeacherHeader(activeTeacherName));
+          loadTeacherRetreats(teacher.id);
         });
         teacherSection.appendChild(chip);
       }
@@ -130,10 +139,11 @@ async function doSearch(clear = true) {
 
     loadMoreBtn.hidden = !talkResult.hasMore;
   } catch (err) {
+    if (myVersion !== viewVersion) return;
     resultsEl.querySelectorAll(".loading").forEach((el) => el.remove());
     resultsEl.insertAdjacentHTML("beforeend", '<div class="empty-state">Search failed. Try again.</div>');
   } finally {
-    loading = false;
+    if (myVersion === viewVersion) loading = false;
   }
 }
 
@@ -154,6 +164,8 @@ function renderTeacherHeader(teacherName) {
     const input = filterForm.querySelector(".teacher-filter-input");
     teacherQuery = input.value.trim();
     currentPage = 1;
+    viewVersion++;
+    loading = false;
     for (const child of [...resultsEl.children]) {
       if (!child.classList.contains("teacher-page-header")) child.remove();
     }
@@ -165,18 +177,20 @@ function renderTeacherHeader(teacherName) {
 
 async function loadTeacherTalks(teacherId, clear) {
   if (loading) return;
+  const myVersion = viewVersion;
   loading = true;
 
   if (clear) {
     resultsEl.innerHTML = "";
     resultsEl.appendChild(renderTeacherHeader(activeTeacherName));
-    // Load retreats in background (only on initial teacher load)
-    loadTeacherRetreats(teacherId);
   }
   resultsEl.insertAdjacentHTML("beforeend", '<div class="loading">Loading...</div>');
 
   try {
     const result = await getTeacherTalks(teacherId, currentPage, teacherQuery);
+
+    if (myVersion !== viewVersion) return;
+
     resultsEl.querySelectorAll(".loading").forEach((el) => el.remove());
 
     if (result.talks.length === 0 && currentPage === 1) {
@@ -191,28 +205,44 @@ async function loadTeacherTalks(teacherId, clear) {
 
     loadMoreBtn.hidden = !result.hasMore;
   } catch (err) {
+    if (myVersion !== viewVersion) return;
     resultsEl.querySelectorAll(".loading").forEach((el) => el.remove());
     resultsEl.insertAdjacentHTML("beforeend", '<div class="empty-state">Failed to load teacher talks.</div>');
   } finally {
-    loading = false;
+    if (myVersion === viewVersion) loading = false;
   }
 }
 
 async function loadTeacherRetreats(teacherId) {
+  if (loading) return;
+  const myVersion = viewVersion;
+  loading = true;
+
+  resultsEl.insertAdjacentHTML("beforeend", '<div class="loading">Loading...</div>');
+
   try {
     const result = await getTeacherRetreats(teacherId);
-    if (!result.retreats || result.retreats.length === 0) return;
+
+    if (myVersion !== viewVersion) return;
+
+    resultsEl.querySelectorAll(".loading").forEach((el) => el.remove());
+
+    // Fall back to showing talks if teacher has no retreats
+    if (!result.retreats || result.retreats.length === 0) {
+      loading = false;
+      loadTeacherTalks(teacherId, false);
+      return;
+    }
 
     const header = resultsEl.querySelector(".teacher-page-header");
     if (!header) return;
 
     const section = document.createElement("div");
-    section.className = "teacher-retreats";
+    section.className = "teacher-retreats expanded";
     section.innerHTML = `<div class="teacher-retreats-label">Retreats (${result.retreats.length})</div>`;
 
     const list = document.createElement("div");
     list.className = "teacher-retreats-list";
-    list.hidden = true;
 
     for (const retreat of result.retreats) {
       const btn = document.createElement("button");
@@ -232,7 +262,11 @@ async function loadTeacherRetreats(teacherId) {
     section.appendChild(list);
     header.after(section);
   } catch (err) {
-    // Silently ignore — retreats are supplementary
+    if (myVersion !== viewVersion) return;
+    resultsEl.querySelectorAll(".loading").forEach((el) => el.remove());
+    resultsEl.insertAdjacentHTML("beforeend", '<div class="empty-state">Failed to load retreats.</div>');
+  } finally {
+    if (myVersion === viewVersion) loading = false;
   }
 }
 
@@ -258,6 +292,8 @@ export function openRetreat(retreatId, retreatName) {
   activeRetreatName = retreatName || "Retreat";
   activeTeacherId = null;
   currentPage = 1;
+  viewVersion++;
+  loading = false;
   resultsEl.innerHTML = "";
   loadMoreBtn.hidden = true;
   loadRetreatTalks(retreatId, true);
@@ -265,6 +301,7 @@ export function openRetreat(retreatId, retreatName) {
 
 async function loadRetreatTalks(retreatId, clear) {
   if (loading) return;
+  const myVersion = viewVersion;
   loading = true;
 
   if (clear) {
@@ -275,6 +312,9 @@ async function loadRetreatTalks(retreatId, clear) {
 
   try {
     const result = await getRetreatTalks(retreatId, currentPage);
+
+    if (myVersion !== viewVersion) return;
+
     resultsEl.querySelectorAll(".loading").forEach((el) => el.remove());
 
     // Update header with server-provided retreat title if we only had a stub
@@ -296,10 +336,11 @@ async function loadRetreatTalks(retreatId, clear) {
 
     loadMoreBtn.hidden = !result.hasMore;
   } catch (err) {
+    if (myVersion !== viewVersion) return;
     resultsEl.querySelectorAll(".loading").forEach((el) => el.remove());
     resultsEl.insertAdjacentHTML("beforeend", '<div class="empty-state">Failed to load retreat talks.</div>');
   } finally {
-    loading = false;
+    if (myVersion === viewVersion) loading = false;
   }
 }
 
