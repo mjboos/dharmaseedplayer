@@ -62,94 +62,69 @@ test("searchTalks parses talk list HTML", async () => {
   }
 });
 
-test("fetchRetreatTalks parses RSS and removes duplicate talks", async () => {
-  const xml = `
-    <rss>
-      <channel>
-        <title>Weekend Retreat (Dharma Seed: Retreat talks)</title>
-        <item>
-          <link>https://dharmaseed.org/talks/900/</link>
-          <title>Jane Doe: First Talk</title>
-          <itunes:author>Jane Doe</itunes:author>
-          <itunes:duration>0:45:00</itunes:duration>
-          <pubDate>Tue, 14 Jan 2025 12:00:00 GMT</pubDate>
-          <enclosure url="https://dharmaseed.org//talks/900/file.mp3?rss=" />
-        </item>
-        <item>
-          <link>https://dharmaseed.org/talks/900/</link>
-          <title>Jane Doe: Duplicate Talk</title>
-          <itunes:author>Jane Doe</itunes:author>
-          <itunes:duration>0:45:00</itunes:duration>
-          <pubDate>Tue, 14 Jan 2025 12:00:00 GMT</pubDate>
-          <enclosure url="https://dharmaseed.org//talks/900/file.mp3?rss=" />
-        </item>
-      </channel>
-    </rss>
+test("fetchRetreatTalks parses HTML retreat page and extracts title", async () => {
+  const html = `
+    <h2>Weekend Retreat</h2>
+    <table width='100%'>
+      <a class="talkteacher" href="/talks/900">First Talk</a>
+      2025-01-14
+      <i>0:45:00</i>
+      <a class='talkteacher' href="/teacher/5">Jane Doe</a>
+      <a href="/talks/900/file.mp3">audio</a>
+    </table>
   `;
 
-  const restore = mockFetch(async () => new Response(xml, { status: 200 }));
+  let requestedUrl = "";
+  const restore = mockFetch(async (input) => {
+    requestedUrl = String(input);
+    return new Response(html, { status: 200 });
+  });
 
   try {
     const result = await fetchRetreatTalks(77, 1);
+    assert.equal(requestedUrl.includes("/retreats/77/"), true);
+    assert.equal(requestedUrl.includes("page=1"), true);
+    assert.equal(requestedUrl.includes("page_items=25"), true);
     assert.equal(result.retreatTitle, "Weekend Retreat");
+    assert.equal(result.hasMore, false);
     assert.equal(result.talks.length, 1);
     assert.equal(result.talks[0].title, "First Talk");
     assert.equal(result.talks[0].durationMinutes, 45);
     assert.equal(result.talks[0].date, "2025-01-14");
-    assert.equal(
-      result.talks[0].audioUrl,
-      "https://dharmaseed.org/talks/900/file.mp3"
-    );
+    assert.equal(result.talks[0].retreatId, 77);
+    assert.equal(result.talks[0].retreatTitle, "Weekend Retreat");
   } finally {
     restore();
   }
 });
 
-test("fetchRetreatTalks sorts talks by date descending", async () => {
-  const xml = `
-    <rss>
-      <channel>
-        <title>Meditation Retreat (Dharma Seed: Retreat talks)</title>
-        <item>
-          <link>https://dharmaseed.org/talks/101/</link>
-          <title>Teacher A: Middle Talk</title>
-          <itunes:author>Teacher A</itunes:author>
-          <itunes:duration>0:30:00</itunes:duration>
-          <pubDate>Wed, 15 Jan 2025 12:00:00 GMT</pubDate>
-          <enclosure url="https://dharmaseed.org/talks/101/file.mp3" />
-        </item>
-        <item>
-          <link>https://dharmaseed.org/talks/102/</link>
-          <title>Teacher A: Newest Talk</title>
-          <itunes:author>Teacher A</itunes:author>
-          <itunes:duration>0:45:00</itunes:duration>
-          <pubDate>Fri, 17 Jan 2025 12:00:00 GMT</pubDate>
-          <enclosure url="https://dharmaseed.org/talks/102/file.mp3" />
-        </item>
-        <item>
-          <link>https://dharmaseed.org/talks/103/</link>
-          <title>Teacher A: Oldest Talk</title>
-          <itunes:author>Teacher A</itunes:author>
-          <itunes:duration>1:00:00</itunes:duration>
-          <pubDate>Mon, 13 Jan 2025 12:00:00 GMT</pubDate>
-          <enclosure url="https://dharmaseed.org/talks/103/file.mp3" />
-        </item>
-      </channel>
-    </rss>
+test("fetchRetreatTalks paginates using HTML page", async () => {
+  const html = `
+    <h2>Big Retreat</h2>
+    <table width='100%'>
+      <a class="talkteacher" href="/talks/101">Talk One</a>
+      2025-01-15
+      <i>0:30:00</i>
+      <a class='talkteacher' href="/teacher/1">Teacher A</a>
+      <a href="/talks/101/file.mp3">audio</a>
+    </table>
+    <a class="next">next</a>
   `;
 
-  const restore = mockFetch(async () => new Response(xml, { status: 200 }));
+  let requestedUrl = "";
+  const restore = mockFetch(async (input) => {
+    requestedUrl = String(input);
+    return new Response(html, { status: 200 });
+  });
 
   try {
-    const result = await fetchRetreatTalks(55, 1);
-    assert.equal(result.talks.length, 3);
-    // Should be sorted newest first
-    assert.equal(result.talks[0].date, "2025-01-17");
-    assert.equal(result.talks[0].title, "Newest Talk");
-    assert.equal(result.talks[1].date, "2025-01-15");
-    assert.equal(result.talks[1].title, "Middle Talk");
-    assert.equal(result.talks[2].date, "2025-01-13");
-    assert.equal(result.talks[2].title, "Oldest Talk");
+    const result = await fetchRetreatTalks(55, 2);
+    assert.equal(requestedUrl.includes("page=2"), true);
+    assert.equal(result.hasMore, true);
+    assert.equal(result.page, 2);
+    assert.equal(result.talks.length, 1);
+    assert.equal(result.talks[0].retreatId, 55);
+    assert.equal(result.talks[0].retreatTitle, "Big Retreat");
   } finally {
     restore();
   }
