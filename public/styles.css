@@ -178,6 +178,14 @@ header h1 {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.retreat-header-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
 }
 
 .retreat-page-name {
@@ -195,6 +203,21 @@ header h1 {
   font-size: 0.85rem;
   cursor: pointer;
   white-space: nowrap;
+}
+
+.share-btn {
+  padding: 8px 14px;
+  background: white;
+  color: #2d5016;
+  border: 1px solid #2d5016;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.share-btn:hover {
+  background: #f8faf6;
 }
 
 .queue-all-btn:hover {

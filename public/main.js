@@ -1,4 +1,4 @@
-import { initSearch, refreshResumeButtons } from "./search.js";
+import { initSearch, refreshResumeButtons, checkInitialHash } from "./search.js";
 import * as player from "./player.js";
 import * as queue from "./queue.js";
 
@@ -23,3 +23,6 @@ player.onEnded(() => {
   const nextTalk = queue.next();
   if (nextTalk) player.play(nextTalk);
 });
+
+// Open retreat from URL hash (e.g. #retreat/123) for shareable links
+checkInitialHash();

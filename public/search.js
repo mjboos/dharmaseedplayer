@@ -36,6 +36,7 @@ export function initSearch({ onPlay, onQueue, onQueueAll }) {
     loading = false;
     resultsEl.innerHTML = "";
     loadMoreBtn.hidden = true;
+    if (window.location.hash) history.pushState(null, "", window.location.pathname + window.location.search);
     doSearch();
   });
 
@@ -47,6 +48,21 @@ export function initSearch({ onPlay, onQueue, onQueueAll }) {
       loadTeacherTalks(activeTeacherId, false);
     } else {
       doSearch(false);
+    }
+  });
+
+  window.addEventListener("popstate", () => {
+    const match = window.location.hash.match(/^#retreat\/(\d+)$/);
+    if (match) {
+      const id = parseInt(match[1], 10);
+      if (activeRetreatId !== id) showRetreat(id, "Retreat");
+    } else if (activeRetreatId) {
+      activeRetreatId = null;
+      activeTeacherId = null;
+      viewVersion++;
+      loading = false;
+      resultsEl.innerHTML = "";
+      loadMoreBtn.hidden = true;
     }
   });
 }
@@ -119,6 +135,7 @@ async function doSearch(clear = true) {
           loading = false;
           resultsEl.innerHTML = "";
           loadMoreBtn.hidden = true;
+          if (window.location.hash) history.pushState(null, "", window.location.pathname + window.location.search);
           resultsEl.appendChild(renderTeacherHeader(activeTeacherName));
           loadTeacherRetreats(teacher.id);
         });
@@ -277,8 +294,20 @@ function renderRetreatHeader(retreatName) {
   header.className = "retreat-page-header";
   header.innerHTML = `
     <div class="retreat-page-name">${esc(retreatName)}</div>
-    <button class="queue-all-btn">Add all to "${esc(document.getElementById("playlist-active-name")?.textContent || "Queue")}"</button>
+    <div class="retreat-header-actions">
+      <button class="share-btn" title="Copy link to retreat">Share</button>
+      <button class="queue-all-btn">Add all to "${esc(document.getElementById("playlist-active-name")?.textContent || "Queue")}"</button>
+    </div>
   `;
+  header.querySelector(".share-btn").addEventListener("click", async (e) => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      e.target.textContent = "Copied!";
+      setTimeout(() => { e.target.textContent = "Share"; }, 2000);
+    } catch {
+      prompt("Copy this link:", window.location.href);
+    }
+  });
   header.querySelector(".queue-all-btn").addEventListener("click", () => {
     const talkEls = resultsEl.querySelectorAll(".talk-item");
     const talks = [...talkEls].map((el) => JSON.parse(el.dataset.talk));
@@ -287,7 +316,7 @@ function renderRetreatHeader(retreatName) {
   return header;
 }
 
-export function openRetreat(retreatId, retreatName) {
+function showRetreat(retreatId, retreatName) {
   activeRetreatId = retreatId;
   activeRetreatName = retreatName || "Retreat";
   activeTeacherId = null;
@@ -297,6 +326,18 @@ export function openRetreat(retreatId, retreatName) {
   resultsEl.innerHTML = "";
   loadMoreBtn.hidden = true;
   loadRetreatTalks(retreatId, true);
+}
+
+export function openRetreat(retreatId, retreatName) {
+  history.pushState(null, "", `#retreat/${retreatId}`);
+  showRetreat(retreatId, retreatName);
+}
+
+export function checkInitialHash() {
+  const match = window.location.hash.match(/^#retreat\/(\d+)$/);
+  if (match) {
+    showRetreat(parseInt(match[1], 10), "Retreat");
+  }
 }
 
 async function loadRetreatTalks(retreatId, clear) {
