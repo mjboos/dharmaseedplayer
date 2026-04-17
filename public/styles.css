@@ -591,16 +591,54 @@ header h1 {
 }
 
 #player-progress-wrap {
-  height: 3px;
+  position: relative;
+  height: 22px;
+  cursor: grab;
+  touch-action: none;
+}
+
+#player-progress-track,
+#player-progress {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  height: 6px;
+  border-radius: 999px;
+  transform: translateY(-50%);
+}
+
+#player-progress-track {
+  width: 100%;
   background: #e0e0e0;
-  cursor: pointer;
 }
 
 #player-progress {
-  height: 100%;
   background: #2d5016;
   width: 0%;
-  transition: width 0.3s linear;
+  transition: width 0.15s linear;
+}
+
+#player-progress-thumb {
+  position: absolute;
+  top: 50%;
+  left: 0%;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #2d5016;
+  border: 2px solid white;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  transform: translate(-50%, -50%);
+  transition: left 0.15s linear, transform 0.15s ease;
+}
+
+#player-progress-wrap:hover #player-progress-thumb,
+#player-progress-wrap.dragging #player-progress-thumb {
+  transform: translate(-50%, -50%) scale(1.08);
+}
+
+#player-progress-wrap.dragging {
+  cursor: grabbing;
 }
 
 #player-controls {

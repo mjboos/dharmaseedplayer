@@ -12,9 +12,13 @@ const playPauseBtn = document.getElementById("player-play-pause");
 const rewindBtn = document.getElementById("player-rewind");
 const forwardBtn = document.getElementById("player-forward");
 const progressEl = document.getElementById("player-progress");
+const progressThumbEl = document.getElementById("player-progress-thumb");
 const progressWrap = document.getElementById("player-progress-wrap");
 const currentTimeEl = document.getElementById("player-current");
 const durationEl = document.getElementById("player-duration");
+
+let isDraggingProgress = false;
+let dragProgressTime = 0;
 
 // --- Per-talk position storage ---
 
@@ -52,11 +56,61 @@ function saveCurrentPosition() {
   }
 }
 
-audio.addEventListener("timeupdate", () => {
-  if (!audio.duration) return;
-  const pct = (audio.currentTime / audio.duration) * 100;
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function updateProgressUiForTime(time) {
+  const hasDuration = Number.isFinite(audio.duration) && audio.duration > 0;
+  const safeTime = hasDuration ? clamp(time || 0, 0, audio.duration) : 0;
+  const pct = hasDuration ? (safeTime / audio.duration) * 100 : 0;
   progressEl.style.width = pct + "%";
-  currentTimeEl.textContent = formatTime(audio.currentTime);
+  progressThumbEl.style.left = pct + "%";
+  currentTimeEl.textContent = formatTime(safeTime);
+  durationEl.textContent = hasDuration ? formatTime(audio.duration) : "0:00";
+}
+
+function updateProgressUi() {
+  updateProgressUiForTime(audio.currentTime || 0);
+}
+
+function getSeekTimeFromClientX(clientX) {
+  if (!Number.isFinite(audio.duration) || audio.duration <= 0) return 0;
+  const rect = progressWrap.getBoundingClientRect();
+  const pct = clamp((clientX - rect.left) / rect.width, 0, 1);
+  return pct * audio.duration;
+}
+
+function beginProgressDrag(e) {
+  if (!audio.duration) return;
+  isDraggingProgress = true;
+  dragProgressTime = getSeekTimeFromClientX(e.clientX);
+  progressWrap.classList.add("dragging");
+  progressWrap.setPointerCapture(e.pointerId);
+  updateProgressUiForTime(dragProgressTime);
+}
+
+function moveProgressDrag(e) {
+  if (!isDraggingProgress || !audio.duration) return;
+  dragProgressTime = getSeekTimeFromClientX(e.clientX);
+  updateProgressUiForTime(dragProgressTime);
+}
+
+function endProgressDrag(e) {
+  if (!isDraggingProgress) return;
+  if (audio.duration) {
+    dragProgressTime = getSeekTimeFromClientX(e.clientX);
+    audio.currentTime = dragProgressTime;
+    updateProgressUi();
+    saveCurrentPosition();
+  }
+  isDraggingProgress = false;
+  progressWrap.classList.remove("dragging");
+}
+
+audio.addEventListener("timeupdate", () => {
+  if (!audio.duration || isDraggingProgress) return;
+  updateProgressUi();
 
   if (!saveTimer) {
     saveTimer = setTimeout(() => {
@@ -67,11 +121,12 @@ audio.addEventListener("timeupdate", () => {
 });
 
 audio.addEventListener("loadedmetadata", () => {
-  durationEl.textContent = formatTime(audio.duration);
+  updateProgressUi();
 });
 
 audio.addEventListener("ended", () => {
   playPauseBtn.innerHTML = "&#9654;";
+  updateProgressUi();
   if (currentTalk) {
     clearPosition(currentTalk.id);
   }
@@ -100,12 +155,10 @@ forwardBtn.addEventListener("click", () => {
   audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 30);
 });
 
-progressWrap.addEventListener("click", (e) => {
-  if (!audio.duration) return;
-  const rect = progressWrap.getBoundingClientRect();
-  const pct = (e.clientX - rect.left) / rect.width;
-  audio.currentTime = pct * audio.duration;
-});
+progressWrap.addEventListener("pointerdown", beginProgressDrag);
+progressWrap.addEventListener("pointermove", moveProgressDrag);
+progressWrap.addEventListener("pointerup", endProgressDrag);
+progressWrap.addEventListener("pointercancel", endProgressDrag);
 
 export function play(talk, startTime) {
   // Save position of the talk we're leaving
@@ -121,6 +174,10 @@ export function play(talk, startTime) {
 
   audio.src = talk.audioUrl;
   audio.load();
+  progressEl.style.width = "0%";
+  progressThumbEl.style.left = "0%";
+  currentTimeEl.textContent = "0:00";
+  durationEl.textContent = "0:00";
 
   // If explicit startTime given use that, otherwise check for saved position
   const resumeTime = startTime != null ? startTime : getPositionForTalk(talk.id);
