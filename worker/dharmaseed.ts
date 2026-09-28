@@ -62,10 +62,11 @@ function parseTalkList(html: string, page: number): SearchResponse {
 
     // Extract teacher name
     const teacherMatch = block.match(
-      /<a\s+class='talkteacher'\s+href="\/teacher\/\d+">([\s\S]*?)<\/a>/
+      /<a\s+class='talkteacher'\s+href="\/teacher\/(\d+)">([\s\S]*?)<\/a>/
     );
+    const teacherId = teacherMatch ? parseInt(teacherMatch[1], 10) : undefined;
     const teacher = teacherMatch
-      ? decodeEntities(teacherMatch[1].trim())
+      ? decodeEntities(teacherMatch[2].trim())
       : "";
 
     // Extract audio URL
@@ -81,7 +82,7 @@ function parseTalkList(html: string, page: number): SearchResponse {
       ? decodeEntities(retreatMatch[2].trim())
       : undefined;
 
-    talks.push({ id, title, teacher, durationMinutes, date, audioUrl, retreatId, retreatTitle });
+    talks.push({ id, title, teacher, teacherId, durationMinutes, date, audioUrl, retreatId, retreatTitle });
   }
 
   // Check if there's a next page
@@ -346,7 +347,10 @@ export async function fetchTeacherTalks(
   const teacherName = await resolveTeacher(teacherId);
   if (teacherName) {
     for (const talk of result.talks) {
-      if (!talk.teacher) talk.teacher = teacherName;
+      if (!talk.teacher) {
+        talk.teacher = teacherName;
+        talk.teacherId = teacherId;
+      }
     }
   }
 
@@ -436,6 +440,7 @@ export async function fetchTalkDetail(
     id,
     title: raw.title || "",
     teacher: teacherName,
+    teacherId: raw.teacher_id || undefined,
     description: raw.description || "",
     audioUrl: raw.audio_url
       ? raw.audio_url.startsWith("http")

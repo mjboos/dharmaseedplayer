@@ -97,6 +97,13 @@ function runSearch() {
   }
 }
 
+function openTeacher(teacher) {
+  closeSuggestions();
+  setScope(teacher, "");
+  runSearch();
+  window.scrollTo(0, 0);
+}
+
 function showTeacher(teacher, q) {
   activeTeacherId = teacher.id;
   activeTeacherName = teacher.name;
@@ -534,13 +541,16 @@ function renderTalk(talk) {
   el.dataset.talk = JSON.stringify(talk);
 
   const savedPos = getPositionForTalk(talk.id);
+  const linkTeacher = talk.teacherId && talk.teacher && talk.teacherId !== activeTeacherId;
 
   el.innerHTML = `
     <div class="talk-item-header">
       <span class="talk-title">${esc(talk.title)}</span>
     </div>
     <div class="talk-meta">
-      <span>${esc(talk.teacher)}</span>
+      ${linkTeacher
+        ? `<button type="button" class="teacher-link">${esc(talk.teacher)}</button>`
+        : `<span>${esc(talk.teacher)}</span>`}
       <span>${esc(talk.date)}</span>
       <span>${talk.durationMinutes} min</span>
     </div>
@@ -557,6 +567,12 @@ function renderTalk(talk) {
     resumeBtn.addEventListener("click", () => playHandler(talk));
   }
   el.querySelector(".queue-btn").addEventListener("click", () => queueHandler(talk));
+  const teacherLink = el.querySelector(".teacher-link");
+  if (teacherLink) {
+    teacherLink.addEventListener("click", () => {
+      openTeacher({ id: talk.teacherId, name: talk.teacher });
+    });
+  }
   const retreatLink = el.querySelector(".retreat-link");
   if (retreatLink) {
     retreatLink.addEventListener("click", () => {

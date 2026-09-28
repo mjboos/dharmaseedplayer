@@ -346,6 +346,22 @@ header h1 {
   color: #3d6b20;
 }
 
+.teacher-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: #2d5016;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+
+.teacher-link:hover {
+  color: #3d6b20;
+  text-decoration-style: solid;
+}
+
 .talk-item {
   background: white;
   border-radius: 8px;

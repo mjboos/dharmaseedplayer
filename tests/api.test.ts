@@ -50,7 +50,9 @@ test("GET /api/talks with a teacher searches that teacher's talks", async () => 
       return Response.json({ items: { "96": { name: "Joseph Goldstein" } } });
     }
     return new Response(
-      `<table width='100%'><a class="talkteacher" href="/talks/5">Metta</a></table>`,
+      `<table width='100%'><a class="talkteacher" href="/talks/5">Metta</a></table>
+       <table width='100%'><a class="talkteacher" href="/talks/6">Co-taught Metta</a>
+         <a class='talkteacher' href="/teacher/42">Sylvia Boorstein</a></table>`,
       { status: 200 }
     );
   });
@@ -61,6 +63,9 @@ test("GET /api/talks with a teacher searches that teacher's talks", async () => 
     const body = await res.json();
     assert.equal(body.talks[0].title, "Metta");
     assert.equal(body.talks[0].teacher, "Joseph Goldstein");
+    assert.equal(body.talks[0].teacherId, 96);
+    assert.equal(body.talks[1].teacher, "Sylvia Boorstein");
+    assert.equal(body.talks[1].teacherId, 42);
     assert.ok(requested[0].includes("/teacher/96/?"));
     assert.ok(requested[0].includes("search=metta"));
   } finally {

@@ -2,6 +2,7 @@ export interface Talk {
   id: number;
   title: string;
   teacher: string;
+  teacherId?: number;
   durationMinutes: number;
   date: string;
   audioUrl: string;
