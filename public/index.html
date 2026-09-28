@@ -14,7 +14,15 @@
   <main>
     <div id="search-area">
       <form id="search-form">
-        <input type="search" id="search-input" placeholder="Search talks..." autocomplete="off" />
+        <div id="search-box">
+          <span id="search-scope" hidden>
+            <span id="search-scope-name"></span>
+            <button type="button" id="search-scope-clear" aria-label="Remove teacher filter">&times;</button>
+          </span>
+          <input type="search" id="search-input" placeholder="Search talks or teachers..." autocomplete="off"
+                 role="combobox" aria-autocomplete="list" aria-controls="search-suggestions" aria-expanded="false" />
+          <div id="search-suggestions" role="listbox" hidden></div>
+        </div>
         <button type="submit">Search</button>
       </form>
       <div id="search-results"></div>

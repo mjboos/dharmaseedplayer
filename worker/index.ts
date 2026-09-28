@@ -1,18 +1,25 @@
 import { Hono } from "hono";
-import { searchTalks, fetchTalkDetail, searchTeachers, fetchTeacherTalks, fetchTeacherRetreats, fetchRetreatTalks } from "./dharmaseed.js";
+import { searchTalks, fetchTalkDetail, searchTeachers, matchTeachers, fetchTeacherTalks, fetchTeacherRetreats, fetchRetreatTalks } from "./dharmaseed.js";
 
 export const app = new Hono();
 
 app.get("/api/talks", async (c) => {
   const query = c.req.query("q") || "";
   const page = parseInt(c.req.query("page") || "1", 10);
+  const teacherParam = c.req.query("teacher");
+  const teacherId = teacherParam ? parseInt(teacherParam, 10) : null;
 
-  if (!query) {
+  if (teacherId !== null && isNaN(teacherId)) {
+    return c.json({ error: "Invalid teacher ID" }, 400);
+  }
+  if (!query && !teacherId) {
     return c.json({ talks: [], page: 1, hasMore: false });
   }
 
   try {
-    const result = await searchTalks(query, page);
+    const result = teacherId
+      ? await fetchTeacherTalks(teacherId, page, query || undefined)
+      : await searchTalks(query, page);
     return c.json(result);
   } catch (e) {
     console.error("Search failed:", e);
@@ -31,6 +38,21 @@ app.get("/api/teachers", async (c) => {
   } catch (e) {
     console.error("Teacher search failed:", e);
     return c.json({ teachers: [] });
+  }
+});
+
+app.get("/api/teachers/match", async (c) => {
+  const query = c.req.query("q") || "";
+  const partial = c.req.query("partial") === "1";
+  if (!query.trim()) {
+    return c.json({ matches: [] });
+  }
+  try {
+    const result = await matchTeachers(query, partial);
+    return c.json(result);
+  } catch (e) {
+    console.error("Teacher match failed:", e);
+    return c.json({ matches: [] });
   }
 });
 

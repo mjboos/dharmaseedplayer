@@ -51,6 +51,7 @@ test("searchTalks parses talk list HTML", async () => {
       id: 123,
       title: "Sam & Lee",
       teacher: 'Teacher "A"',
+      teacherId: 9,
       durationMinutes: 90,
       date: "2024-03-01",
       audioUrl: "https://www.dharmaseed.org/talks/123/audio.mp3",

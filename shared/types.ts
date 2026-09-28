@@ -2,6 +2,7 @@ export interface Talk {
   id: number;
   title: string;
   teacher: string;
+  teacherId?: number;
   durationMinutes: number;
   date: string;
   audioUrl: string;
@@ -27,6 +28,15 @@ export interface Teacher {
 
 export interface TeacherSearchResponse {
   teachers: Teacher[];
+}
+
+export interface TeacherMatch extends Teacher {
+  /** The query with the teacher's name removed, e.g. "metta" for "goldstein metta" */
+  rest: string;
+}
+
+export interface TeacherMatchResponse {
+  matches: TeacherMatch[];
 }
 
 export interface Retreat {

@@ -26,11 +26,12 @@ Tests are written with Node's built-in test runner and executed through `tsx`.
 
 ## API endpoints
 
-- `GET /api/talks?q=<query>&page=<n>`: Search talks.
+- `GET /api/talks?q=<query>&page=<n>&teacher=<id>`: Search talk titles and descriptions, optionally within one teacher's talks.
 - `GET /api/talks/:id`: Fetch one talk detail.
 - `GET /api/teachers?q=<query>`: Search teachers.
+- `GET /api/teachers/match?q=<query>&partial=1`: Find teacher names inside a query and split off the rest (e.g. `goldstein metta` → Joseph Goldstein + `metta`). `partial=1` treats the last word as unfinished, for search-as-you-type.
 - `GET /api/teachers/:id/talks?page=<n>&q=<query>`: List talks by teacher.
-- `GET /api/retreats/:id/talks`: List talks from a retreat RSS feed.
+- `GET /api/retreats/:id/talks`: List talks from a retreat.
 
 ## Project structure
 

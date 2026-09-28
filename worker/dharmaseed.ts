@@ -1,4 +1,4 @@
-import type { Talk, TalkDetail, SearchResponse, Teacher, TeacherSearchResponse, Retreat, TeacherRetreatsResponse } from "../shared/types.js";
+import type { Talk, TalkDetail, SearchResponse, Teacher, TeacherSearchResponse, TeacherMatch, TeacherMatchResponse, Retreat, TeacherRetreatsResponse } from "../shared/types.js";
 
 const BASE = "https://www.dharmaseed.org";
 
@@ -62,10 +62,11 @@ function parseTalkList(html: string, page: number): SearchResponse {
 
     // Extract teacher name
     const teacherMatch = block.match(
-      /<a\s+class='talkteacher'\s+href="\/teacher\/\d+">([\s\S]*?)<\/a>/
+      /<a\s+class='talkteacher'\s+href="\/teacher\/(\d+)">([\s\S]*?)<\/a>/
     );
+    const teacherId = teacherMatch ? parseInt(teacherMatch[1], 10) : undefined;
     const teacher = teacherMatch
-      ? decodeEntities(teacherMatch[1].trim())
+      ? decodeEntities(teacherMatch[2].trim())
       : "";
 
     // Extract audio URL
@@ -81,7 +82,7 @@ function parseTalkList(html: string, page: number): SearchResponse {
       ? decodeEntities(retreatMatch[2].trim())
       : undefined;
 
-    talks.push({ id, title, teacher, durationMinutes, date, audioUrl, retreatId, retreatTitle });
+    talks.push({ id, title, teacher, teacherId, durationMinutes, date, audioUrl, retreatId, retreatTitle });
   }
 
   // Check if there's a next page
@@ -109,11 +110,15 @@ function decodeEntities(str: string): string {
     .replace(/&nbsp;/g, " ");
 }
 
-// Cached list of all teachers (loaded once from JSON API)
-let allTeachers: Teacher[] | null = null;
-let teacherListLoading: Promise<Teacher[]> | null = null;
+export interface TeacherRecord extends Teacher {
+  isPublic: boolean;
+}
 
-async function loadAllTeachers(): Promise<Teacher[]> {
+// Cached list of all teachers (loaded once from JSON API)
+let allTeachers: TeacherRecord[] | null = null;
+let teacherListLoading: Promise<TeacherRecord[]> | null = null;
+
+async function loadAllTeachers(): Promise<TeacherRecord[]> {
   if (allTeachers) return allTeachers;
   if (teacherListLoading) return teacherListLoading;
 
@@ -131,7 +136,7 @@ async function loadAllTeachers(): Promise<Teacher[]> {
       const ids = idsJson.items || [];
 
       // Step 2: Batch fetch teacher details (500 at a time)
-      const teachers: Teacher[] = [];
+      const teachers: TeacherRecord[] = [];
       for (let i = 0; i < ids.length; i += 500) {
         const batch = ids.slice(i, i + 500);
         const body = new URLSearchParams({
@@ -147,12 +152,16 @@ async function loadAllTeachers(): Promise<Teacher[]> {
           throw new Error(`Teacher detail batch failed: ${res.status}`);
         }
         const json = (await res.json()) as {
-          items?: Record<string, { name?: string }>;
+          items?: Record<string, { name?: string; public?: boolean }>;
         };
         if (json.items) {
           for (const [idStr, data] of Object.entries(json.items)) {
             if (data.name) {
-              teachers.push({ id: parseInt(idStr, 10), name: data.name });
+              teachers.push({
+                id: parseInt(idStr, 10),
+                name: data.name,
+                isPublic: data.public === true,
+              });
             }
           }
         }
@@ -180,7 +189,144 @@ export async function searchTeachers(
     const bStarts = b.name.toLowerCase().startsWith(q) ? 0 : 1;
     return aStarts - bStarts || a.name.localeCompare(b.name);
   });
-  return { teachers: matches.slice(0, 20) };
+  return { teachers: matches.slice(0, 20).map(({ id, name }) => ({ id, name })) };
+}
+
+// Titles and filler words shared by many teacher names: they can extend a name match
+// but never make one on their own.
+const HONORIFICS = new Set([
+  "ajahn", "ajaan", "achaan", "ayya", "bhante", "bhikkhu", "bhikkhuni", "venerable", "ven",
+  "sister", "brother", "lama", "roshi", "sensei", "rinpoche", "sayadaw", "dr", "and", "the",
+]);
+
+function normalizeWord(word: string): string {
+  return word
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]/gu, "");
+}
+
+function nameTokens(name: string): string[] {
+  const tokens = new Set<string>();
+  for (const word of name.split(/\s+/)) {
+    const whole = normalizeWord(word);
+    if (whole) tokens.add(whole);
+    // "Beckman-Brindey" is matched by "beckman", "brindey" or "beckman-brindey"
+    for (const part of word.split(/[^\p{L}\p{N}\p{M}]+/u)) {
+      const p = normalizeWord(part);
+      if (p) tokens.add(p);
+    }
+  }
+  return [...tokens];
+}
+
+interface ScoredMatch extends TeacherMatch {
+  score: number;
+  prefixMatches: number;
+  matchesCompleteWord: boolean;
+  firstPosition: number;
+}
+
+function scoreTeachers(
+  words: string[],
+  teachers: TeacherRecord[],
+  prefixIndex: number
+): ScoredMatch[] {
+  const normalized = words.map(normalizeWord);
+  const candidates: ScoredMatch[] = [];
+
+  for (const teacher of teachers) {
+    const available = new Set(nameTokens(teacher.name));
+    const matched = new Set<number>();
+    let prefixMatches = 0;
+    let hasDistinctiveMatch = false;
+
+    normalized.forEach((word, i) => {
+      if (word.length < 2) return;
+      let token: string | undefined;
+      if (available.has(word)) {
+        token = word;
+      } else if (i === prefixIndex) {
+        token = [...available].find((t) => t.startsWith(word));
+        if (token) prefixMatches++;
+      }
+      if (!token) return;
+      available.delete(token);
+      matched.add(i);
+      if (!HONORIFICS.has(token)) hasDistinctiveMatch = true;
+    });
+
+    if (!hasDistinctiveMatch) continue;
+    candidates.push({
+      id: teacher.id,
+      name: teacher.name,
+      rest: words.filter((_, i) => !matched.has(i)).join(" "),
+      score: matched.size,
+      prefixMatches,
+      matchesCompleteWord: [...matched].some((i) => i !== prefixIndex),
+      firstPosition: Math.min(...matched),
+    });
+  }
+  return candidates;
+}
+
+/**
+ * Finds teachers named in a free-text query and splits the query into the teacher and the
+ * remaining words, e.g. "goldstein metta" → Joseph Goldstein + "metta".
+ * With `partial`, the last word may be an unfinished prefix (for search-as-you-type).
+ */
+export function matchTeacherNames(
+  query: string,
+  teachers: TeacherRecord[],
+  { partial = false, limit = 5 } = {}
+): TeacherMatch[] {
+  const words = query.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [];
+  const lastIndex = words.length - 1;
+  const typingLastWord = partial && !/\s$/.test(query);
+  // Non-public teachers have no teacher page on Dharma Seed, so searching within them fails
+  const searchable = teachers.filter((t) => t.isPublic);
+
+  let candidates = scoreTeachers(words, searchable, typingLastWord ? lastIndex : -1);
+  if (candidates.length === 0 && !typingLastWord) {
+    // A submitted query may still end in a shortened name, e.g. "golds"
+    candidates = scoreTeachers(words, searchable, lastIndex);
+  }
+
+  if (candidates.length === 0) {
+    // Only honorifics matched (e.g. "ajahn"): list teachers with a name word starting with the query
+    const q = normalizeWord(query);
+    if (q.length < 2) return [];
+    return searchable
+      .filter((t) => nameTokens(t.name).some((token) => token.startsWith(q)))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .slice(0, limit)
+      .map(({ id, name }) => ({ id, name, rest: "" }));
+  }
+
+  const best = Math.max(...candidates.map((c) => c.score));
+  let top = candidates.filter((c) => c.score === best);
+  // A finished word is stronger evidence than the start of the word being typed:
+  // in "goldstein me", suggest Goldstein, not every teacher whose name starts with "me"
+  if (top.some((c) => c.matchesCompleteWord)) {
+    top = top.filter((c) => c.matchesCompleteWord);
+  }
+  top.sort(
+    (a, b) =>
+      a.prefixMatches - b.prefixMatches ||
+      a.firstPosition - b.firstPosition ||
+      a.name.localeCompare(b.name)
+  );
+  return top.slice(0, limit).map(({ id, name, rest }) => ({ id, name, rest }));
+}
+
+export async function matchTeachers(
+  query: string,
+  partial = false
+): Promise<TeacherMatchResponse> {
+  const teachers = await loadAllTeachers();
+  return { matches: matchTeacherNames(query, teachers, { partial }) };
 }
 
 export async function fetchTeacherTalks(
@@ -201,7 +347,10 @@ export async function fetchTeacherTalks(
   const teacherName = await resolveTeacher(teacherId);
   if (teacherName) {
     for (const talk of result.talks) {
-      if (!talk.teacher) talk.teacher = teacherName;
+      if (!talk.teacher) {
+        talk.teacher = teacherName;
+        talk.teacherId = teacherId;
+      }
     }
   }
 
@@ -291,6 +440,7 @@ export async function fetchTalkDetail(
     id,
     title: raw.title || "",
     teacher: teacherName,
+    teacherId: raw.teacher_id || undefined,
     description: raw.description || "",
     audioUrl: raw.audio_url
       ? raw.audio_url.startsWith("http")

@@ -1,4 +1,4 @@
-import { searchTalks, searchTeachers, getTeacherTalks, getTeacherRetreats, getRetreatTalks } from "./api.js";
+import { searchTalks, matchTeachers, getTeacherRetreats, getRetreatTalks } from "./api.js";
 import { getPositionForTalk, formatTime } from "./player.js";
 
 let currentQuery = "";
@@ -8,37 +8,44 @@ let activeTeacherName = "";
 let activeRetreatId = null;
 let activeRetreatName = "";
 let teacherQuery = "";
+let scopeTeacher = null; // { id, name } shown as a chip in the search box
 let loading = false;
 let viewVersion = 0;
 let playHandler = null;
 let queueHandler = null;
 let queueAddAllHandler = null;
 
+let suggestTimer = null;
+let suggestVersion = 0;
+let suggestions = [];
+let activeSuggestion = -1;
+
 const resultsEl = document.getElementById("search-results");
 const loadMoreBtn = document.getElementById("load-more");
+const inputEl = document.getElementById("search-input");
+const scopeEl = document.getElementById("search-scope");
+const scopeNameEl = document.getElementById("search-scope-name");
+const suggestionsEl = document.getElementById("search-suggestions");
+const defaultPlaceholder = inputEl.placeholder;
 
 export function initSearch({ onPlay, onQueue, onQueueAll }) {
   playHandler = onPlay;
   queueHandler = onQueue;
   queueAddAllHandler = onQueueAll;
   const form = document.getElementById("search-form");
-  const input = document.getElementById("search-input");
 
   form.addEventListener("submit", (e) => {
     e.preventDefault();
-    const q = input.value.trim();
-    if (!q) return;
-    currentQuery = q;
-    currentPage = 1;
-    activeTeacherId = null;
-    activeRetreatId = null;
-    viewVersion++;
-    loading = false;
-    resultsEl.innerHTML = "";
-    loadMoreBtn.hidden = true;
-    if (window.location.hash) history.pushState(null, "", window.location.pathname + window.location.search);
-    doSearch();
+    closeSuggestions();
+    runSearch();
   });
+
+  document.getElementById("search-scope-clear").addEventListener("click", () => {
+    clearScope();
+    inputEl.focus();
+  });
+
+  initSuggestions();
 
   loadMoreBtn.addEventListener("click", () => {
     currentPage++;
@@ -65,6 +72,163 @@ export function initSearch({ onPlay, onQueue, onQueueAll }) {
       loadMoreBtn.hidden = true;
     }
   });
+}
+
+function resetResults() {
+  currentPage = 1;
+  viewVersion++;
+  loading = false;
+  resultsEl.innerHTML = "";
+  loadMoreBtn.hidden = true;
+  if (window.location.hash) history.pushState(null, "", window.location.pathname + window.location.search);
+}
+
+function runSearch() {
+  const q = inputEl.value.trim();
+  if (!q && !scopeTeacher) return;
+  resetResults();
+  activeRetreatId = null;
+  if (scopeTeacher) {
+    showTeacher(scopeTeacher, q);
+  } else {
+    activeTeacherId = null;
+    currentQuery = q;
+    doSearch();
+  }
+}
+
+function openTeacher(teacher) {
+  closeSuggestions();
+  setScope(teacher, "");
+  runSearch();
+  window.scrollTo(0, 0);
+}
+
+function showTeacher(teacher, q) {
+  activeTeacherId = teacher.id;
+  activeTeacherName = teacher.name;
+  teacherQuery = q;
+  resultsEl.appendChild(renderTeacherHeader(teacher.name));
+  if (q) {
+    loadTeacherTalks(teacher.id, false);
+  } else {
+    loadTeacherRetreats(teacher.id);
+  }
+}
+
+// --- Teacher chip in the search box ---
+
+function setScope(teacher, text) {
+  scopeTeacher = { id: teacher.id, name: teacher.name };
+  scopeNameEl.textContent = teacher.name;
+  scopeEl.hidden = false;
+  inputEl.value = text;
+  inputEl.placeholder = "Search their talks...";
+}
+
+function clearScope() {
+  scopeTeacher = null;
+  scopeEl.hidden = true;
+  inputEl.placeholder = defaultPlaceholder;
+}
+
+// --- Teacher suggestions while typing ---
+
+function initSuggestions() {
+  inputEl.addEventListener("input", () => {
+    clearTimeout(suggestTimer);
+    const q = inputEl.value;
+    if (scopeTeacher || q.trim().length < 2) {
+      closeSuggestions();
+      return;
+    }
+    suggestTimer = setTimeout(() => fetchSuggestions(q), 200);
+  });
+
+  inputEl.addEventListener("keydown", (e) => {
+    if (e.key === "Backspace" && scopeTeacher && inputEl.value === "") {
+      clearScope();
+      return;
+    }
+    if (suggestionsEl.hidden) return;
+    const n = suggestions.length;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      activeSuggestion = e.key === "ArrowDown"
+        ? (activeSuggestion + 1) % n
+        : (activeSuggestion - 1 + n) % n;
+      highlightSuggestion();
+    } else if (e.key === "Enter" && activeSuggestion >= 0) {
+      e.preventDefault();
+      selectSuggestion(suggestions[activeSuggestion]);
+    } else if (e.key === "Escape") {
+      closeSuggestions();
+    }
+  });
+
+  inputEl.addEventListener("blur", () => closeSuggestions());
+  // Keep focus in the input so tapping a suggestion doesn't close the list first
+  suggestionsEl.addEventListener("mousedown", (e) => e.preventDefault());
+}
+
+async function fetchSuggestions(q) {
+  const myVersion = ++suggestVersion;
+  let result;
+  try {
+    result = await matchTeachers(q, { partial: true });
+  } catch {
+    return;
+  }
+  if (myVersion !== suggestVersion || scopeTeacher || document.activeElement !== inputEl) return;
+  renderSuggestions(result.matches);
+}
+
+function renderSuggestions(matches) {
+  if (matches.length === 0) {
+    closeSuggestions();
+    return;
+  }
+  suggestions = matches;
+  activeSuggestion = -1;
+  suggestionsEl.innerHTML = "";
+  matches.forEach((match, i) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "suggestion";
+    btn.id = `search-suggestion-${i}`;
+    btn.tabIndex = -1;
+    btn.setAttribute("role", "option");
+    btn.innerHTML = `
+      <span class="suggestion-name">${esc(match.name)}</span>
+      <span class="suggestion-rest">${match.rest ? `Talks matching “${esc(match.rest)}”` : "Teacher"}</span>
+    `;
+    btn.addEventListener("click", () => selectSuggestion(match));
+    suggestionsEl.appendChild(btn);
+  });
+  suggestionsEl.hidden = false;
+  inputEl.setAttribute("aria-expanded", "true");
+}
+
+function highlightSuggestion() {
+  [...suggestionsEl.children].forEach((el, i) => el.classList.toggle("active", i === activeSuggestion));
+  inputEl.setAttribute("aria-activedescendant", `search-suggestion-${activeSuggestion}`);
+}
+
+function selectSuggestion(match) {
+  closeSuggestions();
+  setScope(match, match.rest);
+  runSearch();
+}
+
+function closeSuggestions() {
+  clearTimeout(suggestTimer);
+  suggestVersion++;
+  suggestions = [];
+  activeSuggestion = -1;
+  suggestionsEl.hidden = true;
+  suggestionsEl.innerHTML = "";
+  inputEl.setAttribute("aria-expanded", "false");
+  inputEl.removeAttribute("aria-activedescendant");
 }
 
 // Called by player when switching talks so visible results update
@@ -104,10 +268,10 @@ async function doSearch(clear = true) {
   }
 
   try {
-    // Search talks and teachers in parallel (only on first page)
+    // Search talks and look for teacher names in the query in parallel (only on first page)
     const promises = [searchTalks(currentQuery, currentPage)];
     if (currentPage === 1) {
-      promises.push(searchTeachers(currentQuery));
+      promises.push(matchTeachers(currentQuery));
     }
 
     const [talkResult, teacherResult] = await Promise.all(promises);
@@ -116,35 +280,29 @@ async function doSearch(clear = true) {
 
     resultsEl.querySelectorAll(".loading").forEach((el) => el.remove());
 
-    // Show matching teachers above talk results (first page only)
-    if (teacherResult && teacherResult.teachers.length > 0) {
+    // Offer matching teachers above talk results; picking one scopes the search to them
+    const matches = teacherResult ? teacherResult.matches : [];
+    if (matches.length > 0) {
       const teacherSection = document.createElement("div");
       teacherSection.className = "teacher-results";
-      teacherSection.innerHTML = `<div class="teacher-results-label">Teachers</div>`;
-      for (const teacher of teacherResult.teachers) {
+      const label = matches.some((m) => m.rest) ? "Search within a teacher" : "Teachers";
+      teacherSection.innerHTML = `<div class="teacher-results-label">${label}</div>`;
+      for (const match of matches) {
         const chip = document.createElement("button");
         chip.className = "teacher-chip";
-        chip.textContent = teacher.name;
+        chip.innerHTML = match.rest
+          ? `${esc(match.name)} <span class="teacher-chip-rest">· ${esc(match.rest)}</span>`
+          : esc(match.name);
         chip.addEventListener("click", () => {
-          activeTeacherId = teacher.id;
-          activeTeacherName = teacher.name;
-          activeRetreatId = null;
-          teacherQuery = "";
-          currentPage = 1;
-          viewVersion++;
-          loading = false;
-          resultsEl.innerHTML = "";
-          loadMoreBtn.hidden = true;
-          if (window.location.hash) history.pushState(null, "", window.location.pathname + window.location.search);
-          resultsEl.appendChild(renderTeacherHeader(activeTeacherName));
-          loadTeacherRetreats(teacher.id);
+          setScope(match, match.rest);
+          runSearch();
         });
         teacherSection.appendChild(chip);
       }
       resultsEl.appendChild(teacherSection);
     }
 
-    if (talkResult.talks.length === 0 && currentPage === 1 && (!teacherResult || teacherResult.teachers.length === 0)) {
+    if (talkResult.talks.length === 0 && currentPage === 1 && matches.length === 0) {
       resultsEl.innerHTML = '<div class="empty-state">No talks found</div>';
       loadMoreBtn.hidden = true;
       return;
@@ -167,28 +325,7 @@ async function doSearch(clear = true) {
 function renderTeacherHeader(teacherName) {
   const header = document.createElement("div");
   header.className = "teacher-page-header";
-  header.innerHTML = `
-    <div class="teacher-page-name">${esc(teacherName)}</div>
-    <form class="teacher-filter-form">
-      <input type="search" class="teacher-filter-input" placeholder="Search this teacher's talks..." autocomplete="off" />
-      <button type="submit">Filter</button>
-    </form>
-  `;
-  const filterForm = header.querySelector(".teacher-filter-form");
-  filterForm.addEventListener("submit", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const input = filterForm.querySelector(".teacher-filter-input");
-    teacherQuery = input.value.trim();
-    currentPage = 1;
-    viewVersion++;
-    loading = false;
-    for (const child of [...resultsEl.children]) {
-      if (!child.classList.contains("teacher-page-header")) child.remove();
-    }
-    loadMoreBtn.hidden = true;
-    loadTeacherTalks(activeTeacherId, false);
-  });
+  header.innerHTML = `<div class="teacher-page-name">${esc(teacherName)}</div>`;
   return header;
 }
 
@@ -204,7 +341,7 @@ async function loadTeacherTalks(teacherId, clear) {
   resultsEl.insertAdjacentHTML("beforeend", '<div class="loading">Loading...</div>');
 
   try {
-    const result = await getTeacherTalks(teacherId, currentPage, teacherQuery);
+    const result = await searchTalks(teacherQuery, currentPage, teacherId);
 
     if (myVersion !== viewVersion) return;
 
@@ -276,8 +413,18 @@ async function loadTeacherRetreats(teacherId) {
       section.classList.toggle("expanded");
     });
 
+    const allTalksBtn = document.createElement("button");
+    allTalksBtn.className = "all-talks-btn";
+    allTalksBtn.textContent = "Show all talks";
+    allTalksBtn.addEventListener("click", () => {
+      allTalksBtn.remove();
+      list.hidden = true;
+      section.classList.remove("expanded");
+      loadTeacherTalks(teacherId, false);
+    });
+
     section.appendChild(list);
-    header.after(section);
+    header.after(allTalksBtn, section);
   } catch (err) {
     if (myVersion !== viewVersion) return;
     resultsEl.querySelectorAll(".loading").forEach((el) => el.remove());
@@ -394,13 +541,16 @@ function renderTalk(talk) {
   el.dataset.talk = JSON.stringify(talk);
 
   const savedPos = getPositionForTalk(talk.id);
+  const linkTeacher = talk.teacherId && talk.teacher && talk.teacherId !== activeTeacherId;
 
   el.innerHTML = `
     <div class="talk-item-header">
       <span class="talk-title">${esc(talk.title)}</span>
     </div>
     <div class="talk-meta">
-      <span>${esc(talk.teacher)}</span>
+      ${linkTeacher
+        ? `<button type="button" class="teacher-link">${esc(talk.teacher)}</button>`
+        : `<span>${esc(talk.teacher)}</span>`}
       <span>${esc(talk.date)}</span>
       <span>${talk.durationMinutes} min</span>
     </div>
@@ -417,6 +567,12 @@ function renderTalk(talk) {
     resumeBtn.addEventListener("click", () => playHandler(talk));
   }
   el.querySelector(".queue-btn").addEventListener("click", () => queueHandler(talk));
+  const teacherLink = el.querySelector(".teacher-link");
+  if (teacherLink) {
+    teacherLink.addEventListener("click", () => {
+      openTeacher({ id: talk.teacherId, name: talk.teacher });
+    });
+  }
   const retreatLink = el.querySelector(".retreat-link");
   if (retreatLink) {
     retreatLink.addEventListener("click", () => {
