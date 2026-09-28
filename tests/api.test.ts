@@ -41,6 +41,45 @@ test("GET /api/talks returns 500 on upstream error", async () => {
   }
 });
 
+test("GET /api/talks with a teacher searches that teacher's talks", async () => {
+  const requested: string[] = [];
+  const restore = mockFetch(async (input) => {
+    const url = String(input);
+    requested.push(url);
+    if (url.endsWith("/api/1/teachers/")) {
+      return Response.json({ items: { "96": { name: "Joseph Goldstein" } } });
+    }
+    return new Response(
+      `<table width='100%'><a class="talkteacher" href="/talks/5">Metta</a></table>`,
+      { status: 200 }
+    );
+  });
+
+  try {
+    const res = await app.request("/api/talks?q=metta&teacher=96");
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.talks[0].title, "Metta");
+    assert.equal(body.talks[0].teacher, "Joseph Goldstein");
+    assert.ok(requested[0].includes("/teacher/96/?"));
+    assert.ok(requested[0].includes("search=metta"));
+  } finally {
+    restore();
+  }
+});
+
+test("GET /api/talks validates the teacher id", async () => {
+  const res = await app.request("/api/talks?q=metta&teacher=abc");
+  assert.equal(res.status, 400);
+  assert.deepEqual(await res.json(), { error: "Invalid teacher ID" });
+});
+
+test("GET /api/teachers/match without query returns no matches", async () => {
+  const res = await app.request("/api/teachers/match?q=%20");
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { matches: [] });
+});
+
 test("GET /api/teachers/:id/talks validates numeric id", async () => {
   const res = await app.request("/api/teachers/not-a-number/talks");
   assert.equal(res.status, 400);

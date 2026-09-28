@@ -4,6 +4,11 @@
   padding: 0;
 }
 
+/* Elements styled with display: flex/block would otherwise stay visible when hidden */
+[hidden] {
+  display: none !important;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   background: #f5f5f5;
@@ -35,15 +40,113 @@ header h1 {
   gap: 8px;
 }
 
-#search-input {
+#search-box {
   flex: 1;
-  padding: 10px 12px;
+  min-width: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: white;
   border: 1px solid #ccc;
   border-radius: 8px;
-  font-size: 1rem;
 }
 
-#search-form button {
+#search-box:focus-within {
+  border-color: #2d5016;
+  box-shadow: 0 0 0 2px rgba(45, 80, 22, 0.2);
+}
+
+#search-input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 1rem;
+  outline: none;
+}
+
+#search-scope {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 55%;
+  margin-left: 6px;
+  padding: 4px 2px 4px 10px;
+  background: #2d5016;
+  color: white;
+  border-radius: 16px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+#search-scope-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#search-scope-clear {
+  padding: 0 8px;
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+#search-suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+
+.suggestion {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 12px;
+  background: white;
+  border: none;
+  border-bottom: 1px solid #f0f0f0;
+  text-align: left;
+  font: inherit;
+  color: #333;
+  cursor: pointer;
+}
+
+.suggestion:last-child {
+  border-bottom: none;
+}
+
+.suggestion:hover,
+.suggestion.active {
+  background: #f0f5ec;
+}
+
+.suggestion-name {
+  font-weight: 500;
+  color: #2d5016;
+}
+
+.suggestion-rest {
+  font-size: 0.8rem;
+  color: #777;
+}
+
+#search-form > button {
   padding: 10px 16px;
   background: #2d5016;
   color: white;
@@ -87,6 +190,11 @@ header h1 {
   color: white;
 }
 
+.teacher-chip-rest {
+  font-weight: 400;
+  opacity: 0.8;
+}
+
 .teacher-page-header {
   margin-bottom: 12px;
 }
@@ -98,27 +206,22 @@ header h1 {
   color: #2d5016;
 }
 
-.teacher-filter-form {
-  display: flex;
-  gap: 8px;
-}
-
-.teacher-filter-input {
-  flex: 1;
-  padding: 8px 12px;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  font-size: 0.9rem;
-}
-
-.teacher-filter-form button {
+.all-talks-btn {
+  display: block;
+  margin-bottom: 12px;
   padding: 8px 14px;
+  background: white;
+  border: 1px solid #2d5016;
+  border-radius: 8px;
+  color: #2d5016;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.all-talks-btn:hover {
   background: #2d5016;
   color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.9rem;
-  cursor: pointer;
 }
 
 .teacher-retreats {

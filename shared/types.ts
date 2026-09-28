@@ -29,6 +29,15 @@ export interface TeacherSearchResponse {
   teachers: Teacher[];
 }
 
+export interface TeacherMatch extends Teacher {
+  /** The query with the teacher's name removed, e.g. "metta" for "goldstein metta" */
+  rest: string;
+}
+
+export interface TeacherMatchResponse {
+  matches: TeacherMatch[];
+}
+
 export interface Retreat {
   id: number;
   name: string;
