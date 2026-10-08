@@ -7,7 +7,7 @@ import * as queue from "./queue.js";
 initSearch({
   onPlay: (talk, startTime) => player.play(talk, startTime),
   onQueue: (talk) => queue.add(talk),
-  onQueueAll: (talks) => talks.forEach((t) => queue.add(t)),
+  onQueueAll: (talks) => queue.addAll(talks),
 });
 
 // Wire queue: play from queue (auto-resume saved position)

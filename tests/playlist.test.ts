@@ -59,6 +59,60 @@ test("add multiple talks", () => {
   assert.equal(store.getPlaylist("queue")!.talks.length, 2);
 });
 
+// --- Adding a batch of talks (e.g. a whole retreat) ---
+
+const talk4 = { id: 4, title: "Talk 4", teacher: "Teacher A", durationMinutes: 30, date: "2024-01-04", audioUrl: "/a/4" };
+const talk5 = { id: 5, title: "Talk 5", teacher: "Teacher A", durationMinutes: 30, date: "2024-01-05", audioUrl: "/a/5" };
+
+function ids(store: ReturnType<typeof createPlaylistStore>) {
+  return store.getAll("queue").map((t) => t.id);
+}
+
+test("addTalks appends talks in the given order", () => {
+  const store = createPlaylistStore(mockStorage());
+  store.addTalk("queue", talk5);
+  store.addTalks("queue", [talk1, talk2, talk3]);
+  assert.deepEqual(ids(store), [5, 1, 2, 3]);
+});
+
+test("addTalks keeps the given order when some talks are already in the playlist", () => {
+  const store = createPlaylistStore(mockStorage());
+  store.addTalk("queue", talk3);
+  store.addTalks("queue", [talk1, talk2, talk3, talk4]);
+  assert.deepEqual(ids(store), [1, 2, 3, 4]);
+});
+
+test("addTalks places the batch where its earliest existing talk was", () => {
+  const store = createPlaylistStore(mockStorage());
+  store.addTalk("queue", talk5);
+  store.addTalk("queue", talk3);
+  store.addTalk("queue", { ...talk1, id: 99 });
+  store.addTalks("queue", [talk1, talk2, talk3, talk4]);
+  assert.deepEqual(ids(store), [5, 1, 2, 3, 4, 99]);
+});
+
+test("addTalks reorders talks already in the playlist", () => {
+  const store = createPlaylistStore(mockStorage());
+  store.addTalk("queue", talk3);
+  store.addTalk("queue", talk2);
+  store.addTalk("queue", talk1);
+  store.addTalks("queue", [talk1, talk2, talk3]);
+  assert.deepEqual(ids(store), [1, 2, 3]);
+});
+
+test("addTalks ignores duplicates within the batch", () => {
+  const store = createPlaylistStore(mockStorage());
+  store.addTalks("queue", [talk1, talk2, talk1]);
+  assert.deepEqual(ids(store), [1, 2]);
+});
+
+test("addTalks to non-existent playlist is no-op", () => {
+  const store = createPlaylistStore(mockStorage());
+  store.addTalks("nope", [talk1]);
+  assert.equal(store.getPlaylists().length, 1);
+  assert.deepEqual(ids(store), []);
+});
+
 // --- Removing talks ---
 
 test("remove talk from playlist", () => {

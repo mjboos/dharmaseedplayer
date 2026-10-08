@@ -58,6 +58,11 @@ export function add(talk) {
   render();
 }
 
+export function addAll(talks) {
+  store.addTalks(store.getActivePlaylistId(), talks);
+  render();
+}
+
 export function addToPlaylist(playlistId, talk) {
   store.addTalk(playlistId, talk);
   if (playlistId === store.getActivePlaylistId()) render();
