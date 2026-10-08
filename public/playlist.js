@@ -148,5 +148,30 @@ export function createPlaylistStore(storage) {
       if (activeId === id) activeId = DEFAULT_ID;
       save();
     },
+
+    /**
+     * Merges imported playlists in; never removes anything. A playlist whose id already
+     * exists (the Queue, or one from an earlier import) gets only the talks it lacks,
+     * so importing the same file twice changes nothing. Returns what was added.
+     */
+    importPlaylists(incoming) {
+      let playlistsAdded = 0;
+      let talksAdded = 0;
+      for (const inc of incoming) {
+        let pl = inc.id && findPlaylist(inc.id);
+        if (!pl) {
+          pl = { id: inc.id || crypto.randomUUID(), name: inc.name, talks: [] };
+          playlists.push(pl);
+          playlistsAdded++;
+        }
+        for (const talk of inc.talks) {
+          if (pl.talks.some((t) => t.id === talk.id)) continue;
+          pl.talks.push(talk);
+          talksAdded++;
+        }
+      }
+      save();
+      return { playlists: playlistsAdded, talks: talksAdded };
+    },
   };
 }

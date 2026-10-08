@@ -22,6 +22,10 @@ The site is a Progressive Web App. On Android, open it in Chrome and choose **In
 
 Playlists and playback positions are stored in the browser for the site's address, so the installed app shares them with the browser tab, as long as you install it from the same address. `public/sw.js` caches the app shell (network-first, so deploys show up on the next launch); API calls and audio are never cached. When adding a file to `public/`, add it to `SHELL` in `public/sw.js`. `tests/pwa.test.ts` checks this.
 
+## Back up and move playlists
+
+In the queue panel, tap the playlist name to open the playlist list, then use **Export playlists** to download a `.json` file with all playlists and playback positions. **Import playlists** on another device or browser (or after clearing site data) merges that file back in: nothing is removed, playlists that already exist only get the talks they're missing, and positions already saved on the device are kept.
+
 ## Run tests
 
 ```bash

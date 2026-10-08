@@ -46,6 +46,19 @@ export function getPositionForTalk(talkId) {
   return loadPositions()[talkId] || 0;
 }
 
+export function getPositions() {
+  return loadPositions();
+}
+
+/** Adds imported positions for talks that have none here; positions saved on this device win. */
+export function mergePositions(imported) {
+  const positions = loadPositions();
+  for (const [talkId, time] of Object.entries(imported)) {
+    if (!(talkId in positions)) positions[talkId] = time;
+  }
+  localStorage.setItem(POSITIONS_KEY, JSON.stringify(positions));
+}
+
 // --- Throttled position save ---
 
 let saveTimer = null;

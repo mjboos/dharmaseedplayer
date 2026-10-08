@@ -1,4 +1,5 @@
 import { createPlaylistStore } from "./playlist.js";
+import { createBackup, backupFilename, parseBackup } from "./backup.js";
 
 const store = createPlaylistStore(localStorage);
 
@@ -12,8 +13,13 @@ const activeNameEl = document.getElementById("playlist-active-name");
 const picker = document.getElementById("playlist-picker");
 const pickerList = document.getElementById("playlist-picker-list");
 const newPlaylistBtn = document.getElementById("new-playlist-btn");
+const exportBtn = document.getElementById("export-playlists-btn");
+const importBtn = document.getElementById("import-playlists-btn");
+const importInput = document.getElementById("import-playlists-input");
 
 let onPlayCallback = null;
+let getPositionsCallback = () => ({});
+let mergePositionsCallback = () => {};
 
 toggleBtn.addEventListener("click", () => {
   panel.classList.toggle("hidden");
@@ -47,8 +53,44 @@ newPlaylistBtn.addEventListener("click", () => {
   render();
 });
 
-export function initQueue({ onPlay }) {
+// Export: download all playlists (and playback positions) as a JSON file
+exportBtn.addEventListener("click", () => {
+  const backup = createBackup(store.getPlaylists(), getPositionsCallback());
+  const url = URL.createObjectURL(new Blob([backup], { type: "application/json" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = backupFilename();
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+});
+
+// Import: merge playlists from an exported file into the existing ones
+importBtn.addEventListener("click", () => importInput.click());
+importInput.addEventListener("change", async () => {
+  const file = importInput.files[0];
+  importInput.value = ""; // so picking the same file again still fires "change"
+  if (!file) return;
+
+  let backup;
+  try {
+    backup = parseBackup(await file.text());
+  } catch (e) {
+    alert(e.message);
+    return;
+  }
+  const added = store.importPlaylists(backup.playlists);
+  mergePositionsCallback(backup.positions);
+  renderPicker();
+  render();
+  alert(added.playlists || added.talks
+    ? `Imported ${plural(added.playlists, "new playlist")} and ${plural(added.talks, "talk")}.`
+    : "Nothing new to import: everything in that file is already here.");
+});
+
+export function initQueue({ onPlay, getPositions, mergePositions }) {
   onPlayCallback = onPlay;
+  getPositionsCallback = getPositions;
+  mergePositionsCallback = mergePositions;
   updateHeader();
   render();
 }
@@ -113,7 +155,7 @@ function renderPicker() {
     btn.className = "playlist-picker-btn";
     btn.innerHTML = `
       <span class="playlist-picker-name">${esc(pl.name)}</span>
-      <span class="playlist-picker-count">${pl.talks.length} talk${pl.talks.length !== 1 ? "s" : ""}</span>
+      <span class="playlist-picker-count">${plural(pl.talks.length, "talk")}</span>
     `;
     btn.addEventListener("click", () => {
       store.setActivePlaylist(pl.id);
@@ -193,6 +235,10 @@ function render() {
     });
     listEl.appendChild(el);
   });
+}
+
+function plural(n, word) {
+  return `${n} ${word}${n !== 1 ? "s" : ""}`;
 }
 
 function esc(str) {

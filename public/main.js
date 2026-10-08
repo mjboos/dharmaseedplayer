@@ -10,9 +10,12 @@ initSearch({
   onQueueAll: (talks) => queue.addAll(talks),
 });
 
-// Wire queue: play from queue (auto-resume saved position)
+// Wire queue: play from queue (auto-resume saved position);
+// export/import carries playback positions along with the playlists
 queue.initQueue({
   onPlay: (talk) => player.play(talk),
+  getPositions: () => player.getPositions(),
+  mergePositions: (positions) => player.mergePositions(positions),
 });
 
 // When switching talks, update resume buttons in search results

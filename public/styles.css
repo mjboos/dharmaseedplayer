@@ -637,6 +637,19 @@ header h1 {
   background: #f8faf6;
 }
 
+#playlist-backup {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  flex-shrink: 0;
+}
+
+#playlist-backup .playlist-action-btn {
+  flex: 1;
+  padding: 10px;
+  font-size: 0.85rem;
+}
+
 #queue-close {
   background: none;
   border: none;

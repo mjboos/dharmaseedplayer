@@ -320,3 +320,52 @@ test("setting active to non-existent playlist is no-op", () => {
   store.setActivePlaylist("nonexistent");
   assert.equal(store.getActivePlaylistId(), "queue");
 });
+
+// --- Importing playlists (from an export file) ---
+
+test("importing into a fresh store adds new playlists and merges into Queue", () => {
+  const store = createPlaylistStore(mockStorage());
+  const added = store.importPlaylists([
+    { id: "queue", name: "Queue", talks: [talk1] },
+    { id: "abc", name: "Metta", talks: [talk2, talk3] },
+  ]);
+  assert.deepEqual(added, { playlists: 1, talks: 3 });
+  assert.equal(store.getPlaylists().length, 2);
+  assert.deepEqual(store.getAll("queue").map((t) => t.id), [1]);
+  assert.equal(store.getPlaylist("abc")!.name, "Metta");
+  assert.deepEqual(store.getAll("abc").map((t) => t.id), [2, 3]);
+});
+
+test("importing the same playlists twice changes nothing", () => {
+  const store = createPlaylistStore(mockStorage());
+  const file = [{ id: "abc", name: "Metta", talks: [talk1, talk2] }];
+  store.importPlaylists(file);
+  const added = store.importPlaylists(file);
+  assert.deepEqual(added, { playlists: 0, talks: 0 });
+  assert.equal(store.getPlaylists().length, 2);
+  assert.equal(store.getAll("abc").length, 2);
+});
+
+test("import keeps existing talks, order and name, appending only missing talks", () => {
+  const store = createPlaylistStore(mockStorage());
+  const id = store.createPlaylist("Local name");
+  store.addTalk(id, talk3);
+  store.addTalk(id, talk1);
+  const added = store.importPlaylists([{ id, name: "Old name", talks: [talk1, talk2] }]);
+  assert.deepEqual(added, { playlists: 0, talks: 1 });
+  assert.deepEqual(store.getAll(id).map((t) => t.id), [3, 1, 2]);
+  assert.equal(store.getPlaylist(id)!.name, "Local name");
+});
+
+test("imported playlist without an id gets a new one", () => {
+  const store = createPlaylistStore(mockStorage());
+  store.importPlaylists([{ id: null, name: "No id", talks: [talk1] }]);
+  const pl = store.getPlaylists().find((p) => p.name === "No id");
+  assert.ok(pl && pl.id);
+});
+
+test("imported playlists persist", () => {
+  const storage = mockStorage();
+  createPlaylistStore(storage).importPlaylists([{ id: "abc", name: "Metta", talks: [talk1] }]);
+  assert.equal(createPlaylistStore(storage).getAll("abc").length, 1);
+});
