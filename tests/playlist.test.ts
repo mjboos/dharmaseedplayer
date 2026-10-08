@@ -132,20 +132,26 @@ test("remove non-existent talk is no-op", () => {
   assert.equal(store.getPlaylist("queue")!.talks.length, 1);
 });
 
-// --- next() ---
+// --- getNext() ---
 
-test("next() returns and removes first talk from active playlist", () => {
+test("getNext() returns the talk after the given one and keeps the playlist intact", () => {
   const store = createPlaylistStore(mockStorage());
-  store.addTalk("queue", talk1);
-  store.addTalk("queue", talk2);
-  const next = store.next();
-  assert.deepEqual(next, talk1);
-  assert.equal(store.getPlaylist("queue")!.talks.length, 1);
+  store.addTalks("queue", [talk1, talk2, talk3]);
+  assert.deepEqual(store.getNext("queue", 2), talk3);
+  assert.deepEqual(ids(store), [1, 2, 3]);
 });
 
-test("next() returns null on empty playlist", () => {
+test("getNext() returns null after the last talk", () => {
   const store = createPlaylistStore(mockStorage());
-  assert.equal(store.next(), null);
+  store.addTalks("queue", [talk1, talk2]);
+  assert.equal(store.getNext("queue", 2), null);
+});
+
+test("getNext() returns null for a talk not in the playlist", () => {
+  const store = createPlaylistStore(mockStorage());
+  store.addTalks("queue", [talk1, talk2]);
+  assert.equal(store.getNext("queue", 999), null);
+  assert.equal(store.getNext("nope", 1), null);
 });
 
 // --- Creating playlists ---
@@ -220,16 +226,13 @@ test("set active playlist", () => {
   assert.equal(store.getActivePlaylistId(), id);
 });
 
-test("next() uses active playlist", () => {
+test("getNext() only looks in the given playlist", () => {
   const store = createPlaylistStore(mockStorage());
   const id = store.createPlaylist("Custom");
-  store.addTalk(id, talk3);
-  store.addTalk("queue", talk1);
-  store.setActivePlaylist(id);
-  const next = store.next();
-  assert.deepEqual(next, talk3);
-  // Queue untouched
-  assert.equal(store.getPlaylist("queue")!.talks.length, 1);
+  store.addTalks(id, [talk1, talk3]);
+  store.addTalks("queue", [talk1, talk2]);
+  assert.deepEqual(store.getNext(id, 1), talk3);
+  assert.deepEqual(store.getNext("queue", 1), talk2);
 });
 
 // --- Persistence ---

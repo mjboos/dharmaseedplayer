@@ -18,9 +18,11 @@ queue.initQueue({
 // When switching talks, update resume buttons in search results
 player.onSwitch(() => refreshResumeButtons());
 
-// Auto-advance: when a talk ends, play next from queue
+// Auto-advance: when a talk ends, play the one after it in the active playlist.
+// Finished talks stay in the playlist.
 player.onEnded(() => {
-  const nextTalk = queue.next();
+  const finished = player.getCurrentTalk();
+  const nextTalk = finished && queue.nextAfter(finished.id);
   if (nextTalk) player.play(nextTalk);
 });
 

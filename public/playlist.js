@@ -108,12 +108,12 @@ export function createPlaylistStore(storage) {
       save();
     },
 
-    next() {
-      const pl = findPlaylist(activeId);
-      if (!pl || pl.talks.length === 0) return null;
-      const talk = pl.talks.shift();
-      save();
-      return talk;
+    /** The talk after `talkId` in the playlist, or null if it is last or not in it. */
+    getNext(playlistId, talkId) {
+      const pl = findPlaylist(playlistId);
+      if (!pl) return null;
+      const i = pl.talks.findIndex((t) => t.id === talkId);
+      return i === -1 ? null : pl.talks[i + 1] || null;
     },
 
     getAll(playlistId) {
