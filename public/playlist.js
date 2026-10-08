@@ -85,6 +85,22 @@ export function createPlaylistStore(storage) {
       save();
     },
 
+    /**
+     * Adds talks as one run in the given order (e.g. a retreat, oldest first).
+     * Talks already in the playlist move into that run, which takes the place of
+     * the earliest of them — so re-adding a retreat puts all of it back in order.
+     */
+    addTalks(playlistId, talks) {
+      const pl = findPlaylist(playlistId);
+      if (!pl) return;
+      const batch = new Map(talks.map((t) => [t.id, t]));
+      const firstExisting = pl.talks.findIndex((t) => batch.has(t.id));
+      const rest = pl.talks.filter((t) => !batch.has(t.id));
+      const at = firstExisting === -1 ? rest.length : firstExisting;
+      pl.talks = [...rest.slice(0, at), ...batch.values(), ...rest.slice(at)];
+      save();
+    },
+
     removeTalk(playlistId, talkId) {
       const pl = findPlaylist(playlistId);
       if (!pl) return;
@@ -92,12 +108,12 @@ export function createPlaylistStore(storage) {
       save();
     },
 
-    next() {
-      const pl = findPlaylist(activeId);
-      if (!pl || pl.talks.length === 0) return null;
-      const talk = pl.talks.shift();
-      save();
-      return talk;
+    /** The talk after `talkId` in the playlist, or null if it is last or not in it. */
+    getNext(playlistId, talkId) {
+      const pl = findPlaylist(playlistId);
+      if (!pl) return null;
+      const i = pl.talks.findIndex((t) => t.id === talkId);
+      return i === -1 ? null : pl.talks[i + 1] || null;
     },
 
     getAll(playlistId) {

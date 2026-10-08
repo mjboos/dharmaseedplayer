@@ -59,6 +59,60 @@ test("add multiple talks", () => {
   assert.equal(store.getPlaylist("queue")!.talks.length, 2);
 });
 
+// --- Adding a batch of talks (e.g. a whole retreat) ---
+
+const talk4 = { id: 4, title: "Talk 4", teacher: "Teacher A", durationMinutes: 30, date: "2024-01-04", audioUrl: "/a/4" };
+const talk5 = { id: 5, title: "Talk 5", teacher: "Teacher A", durationMinutes: 30, date: "2024-01-05", audioUrl: "/a/5" };
+
+function ids(store: ReturnType<typeof createPlaylistStore>) {
+  return store.getAll("queue").map((t) => t.id);
+}
+
+test("addTalks appends talks in the given order", () => {
+  const store = createPlaylistStore(mockStorage());
+  store.addTalk("queue", talk5);
+  store.addTalks("queue", [talk1, talk2, talk3]);
+  assert.deepEqual(ids(store), [5, 1, 2, 3]);
+});
+
+test("addTalks keeps the given order when some talks are already in the playlist", () => {
+  const store = createPlaylistStore(mockStorage());
+  store.addTalk("queue", talk3);
+  store.addTalks("queue", [talk1, talk2, talk3, talk4]);
+  assert.deepEqual(ids(store), [1, 2, 3, 4]);
+});
+
+test("addTalks places the batch where its earliest existing talk was", () => {
+  const store = createPlaylistStore(mockStorage());
+  store.addTalk("queue", talk5);
+  store.addTalk("queue", talk3);
+  store.addTalk("queue", { ...talk1, id: 99 });
+  store.addTalks("queue", [talk1, talk2, talk3, talk4]);
+  assert.deepEqual(ids(store), [5, 1, 2, 3, 4, 99]);
+});
+
+test("addTalks reorders talks already in the playlist", () => {
+  const store = createPlaylistStore(mockStorage());
+  store.addTalk("queue", talk3);
+  store.addTalk("queue", talk2);
+  store.addTalk("queue", talk1);
+  store.addTalks("queue", [talk1, talk2, talk3]);
+  assert.deepEqual(ids(store), [1, 2, 3]);
+});
+
+test("addTalks ignores duplicates within the batch", () => {
+  const store = createPlaylistStore(mockStorage());
+  store.addTalks("queue", [talk1, talk2, talk1]);
+  assert.deepEqual(ids(store), [1, 2]);
+});
+
+test("addTalks to non-existent playlist is no-op", () => {
+  const store = createPlaylistStore(mockStorage());
+  store.addTalks("nope", [talk1]);
+  assert.equal(store.getPlaylists().length, 1);
+  assert.deepEqual(ids(store), []);
+});
+
 // --- Removing talks ---
 
 test("remove talk from playlist", () => {
@@ -78,20 +132,26 @@ test("remove non-existent talk is no-op", () => {
   assert.equal(store.getPlaylist("queue")!.talks.length, 1);
 });
 
-// --- next() ---
+// --- getNext() ---
 
-test("next() returns and removes first talk from active playlist", () => {
+test("getNext() returns the talk after the given one and keeps the playlist intact", () => {
   const store = createPlaylistStore(mockStorage());
-  store.addTalk("queue", talk1);
-  store.addTalk("queue", talk2);
-  const next = store.next();
-  assert.deepEqual(next, talk1);
-  assert.equal(store.getPlaylist("queue")!.talks.length, 1);
+  store.addTalks("queue", [talk1, talk2, talk3]);
+  assert.deepEqual(store.getNext("queue", 2), talk3);
+  assert.deepEqual(ids(store), [1, 2, 3]);
 });
 
-test("next() returns null on empty playlist", () => {
+test("getNext() returns null after the last talk", () => {
   const store = createPlaylistStore(mockStorage());
-  assert.equal(store.next(), null);
+  store.addTalks("queue", [talk1, talk2]);
+  assert.equal(store.getNext("queue", 2), null);
+});
+
+test("getNext() returns null for a talk not in the playlist", () => {
+  const store = createPlaylistStore(mockStorage());
+  store.addTalks("queue", [talk1, talk2]);
+  assert.equal(store.getNext("queue", 999), null);
+  assert.equal(store.getNext("nope", 1), null);
 });
 
 // --- Creating playlists ---
@@ -166,16 +226,13 @@ test("set active playlist", () => {
   assert.equal(store.getActivePlaylistId(), id);
 });
 
-test("next() uses active playlist", () => {
+test("getNext() only looks in the given playlist", () => {
   const store = createPlaylistStore(mockStorage());
   const id = store.createPlaylist("Custom");
-  store.addTalk(id, talk3);
-  store.addTalk("queue", talk1);
-  store.setActivePlaylist(id);
-  const next = store.next();
-  assert.deepEqual(next, talk3);
-  // Queue untouched
-  assert.equal(store.getPlaylist("queue")!.talks.length, 1);
+  store.addTalks(id, [talk1, talk3]);
+  store.addTalks("queue", [talk1, talk2]);
+  assert.deepEqual(store.getNext(id, 1), talk3);
+  assert.deepEqual(store.getNext("queue", 1), talk2);
 });
 
 // --- Persistence ---

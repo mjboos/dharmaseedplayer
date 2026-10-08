@@ -58,6 +58,11 @@ export function add(talk) {
   render();
 }
 
+export function addAll(talks) {
+  store.addTalks(store.getActivePlaylistId(), talks);
+  render();
+}
+
 export function addToPlaylist(playlistId, talk) {
   store.addTalk(playlistId, talk);
   if (playlistId === store.getActivePlaylistId()) render();
@@ -68,10 +73,8 @@ export function remove(id) {
   render();
 }
 
-export function next() {
-  const talk = store.next();
-  render();
-  return talk;
+export function nextAfter(talkId) {
+  return store.getNext(store.getActivePlaylistId(), talkId);
 }
 
 export function getAll() {
