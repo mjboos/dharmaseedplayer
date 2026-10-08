@@ -28,3 +28,10 @@ player.onEnded(() => {
 
 // Open retreat from URL hash (e.g. #retreat/123) for shareable links
 checkInitialHash();
+
+// Service worker makes the app installable ("Install app" / "Add to Home screen")
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch((e) => console.error("Service worker registration failed:", e));
+  });
+}

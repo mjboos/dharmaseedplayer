@@ -16,6 +16,12 @@ npm run dev
 
 Server starts at `http://localhost:3000`.
 
+## Install as an app
+
+The site is a Progressive Web App. On Android, open it in Chrome and choose **Install app** (or **Add to Home screen**) from the ⋮ menu; on iOS, use Safari's Share → **Add to Home Screen**. It then opens full-screen from its own icon.
+
+Playlists and playback positions are stored in the browser for the site's address, so the installed app shares them with the browser tab, as long as you install it from the same address. `public/sw.js` caches the app shell (network-first, so deploys show up on the next launch); API calls and audio are never cached. When adding a file to `public/`, add it to `SHELL` in `public/sw.js`. `tests/pwa.test.ts` checks this.
+
 ## Run tests
 
 ```bash
@@ -38,6 +44,6 @@ Tests are written with Node's built-in test runner and executed through `tsx`.
 - `server.ts`: HTTP server and static file serving.
 - `worker/index.ts`: API routes.
 - `worker/dharmaseed.ts`: DharmaSeed integration and parsing logic.
-- `public/`: Client-side app.
+- `public/`: Client-side app, including the PWA manifest, service worker (`sw.js`) and icons (`icon.svg` is the source for the PNGs).
 - `shared/types.ts`: Shared data types.
 - `tests/`: Unit and API tests.
