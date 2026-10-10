@@ -1,4 +1,5 @@
 import { createPlaylistStore } from "./playlist.js";
+import { linkTo, copyLink } from "./share.js";
 
 const store = createPlaylistStore(localStorage);
 
@@ -14,6 +15,7 @@ const pickerList = document.getElementById("playlist-picker-list");
 const newPlaylistBtn = document.getElementById("new-playlist-btn");
 
 let onPlayCallback = null;
+let onOpenRetreatCallback = null;
 
 toggleBtn.addEventListener("click", () => {
   panel.classList.toggle("hidden");
@@ -47,8 +49,9 @@ newPlaylistBtn.addEventListener("click", () => {
   render();
 });
 
-export function initQueue({ onPlay }) {
+export function initQueue({ onPlay, onOpenRetreat }) {
   onPlayCallback = onPlay;
+  onOpenRetreatCallback = onOpenRetreat;
   updateHeader();
   render();
 }
@@ -181,6 +184,10 @@ function render() {
       <div class="queue-item-info">
         <div class="queue-item-title">${esc(talk.title)}</div>
         <div class="queue-item-teacher">${esc(talk.teacher)}</div>
+        <div class="queue-item-links">
+          ${talk.retreatId ? '<button class="queue-item-link queue-retreat">Retreat</button>' : ""}
+          <button class="queue-item-link queue-share" title="Copy link to talk">Share</button>
+        </div>
       </div>
       <button class="queue-play" title="Play">&#9654;</button>
       <button class="queue-remove" title="Remove">&times;</button>
@@ -188,6 +195,16 @@ function render() {
     el.querySelector(".queue-play").addEventListener("click", () => {
       if (onPlayCallback) onPlayCallback(talk);
     });
+    const retreatBtn = el.querySelector(".queue-retreat");
+    if (retreatBtn) {
+      retreatBtn.title = talk.retreatTitle ? `Go to retreat: ${talk.retreatTitle}` : "Go to retreat";
+      retreatBtn.addEventListener("click", () => {
+        panel.classList.add("hidden");
+        if (onOpenRetreatCallback) onOpenRetreatCallback(talk);
+      });
+    }
+    const shareBtn = el.querySelector(".queue-share");
+    shareBtn.addEventListener("click", () => copyLink(linkTo(`talk/${talk.id}`), shareBtn));
     el.querySelector(".queue-remove").addEventListener("click", () => {
       remove(talk.id);
     });

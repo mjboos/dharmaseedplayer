@@ -344,7 +344,7 @@ export async function fetchTeacherTalks(
   const result = parseTalkList(html, page);
 
   // Teacher pages don't include the teacher name per-talk, so resolve and fill it in
-  const teacherName = await resolveTeacher(teacherId);
+  const teacherName = await resolveName("teachers", teacherId);
   if (teacherName) {
     for (const talk of result.talks) {
       if (!talk.teacher) {
@@ -413,6 +413,9 @@ export async function fetchRetreatTalks(
   return { ...result, retreatTitle };
 }
 
+// Dharma Seed files talks without a retreat under a catch-all "Unknown" retreat
+const UNKNOWN_RETREAT_ID = 1;
+
 export async function fetchTalkDetail(
   id: number
 ): Promise<TalkDetail | null> {
@@ -434,7 +437,11 @@ export async function fetchTalkDetail(
   const raw = json.items?.[String(id)];
   if (!raw) return null;
 
-  const teacherName = await resolveTeacher(raw.teacher_id);
+  const retreatId = raw.retreat_id && raw.retreat_id !== UNKNOWN_RETREAT_ID ? raw.retreat_id : undefined;
+  const [teacherName, retreatTitle] = await Promise.all([
+    resolveName("teachers", raw.teacher_id),
+    resolveName("retreats", retreatId),
+  ]);
 
   const detail: TalkDetail = {
     id,
@@ -450,26 +457,29 @@ export async function fetchTalkDetail(
     durationMinutes: raw.duration_in_minutes
       ? Math.round(raw.duration_in_minutes)
       : 0,
-    date: raw.rec_date || "",
-    retreatTitle: raw.retreat_title,
+    // "2007-02-24 00:00:00" → "2007-02-24", as in talk lists
+    date: (raw.rec_date || "").slice(0, 10),
+    retreatId,
+    retreatTitle: retreatTitle || undefined,
   };
 
   cacheSet(cacheKey, JSON.stringify(detail));
   return detail;
 }
 
-async function resolveTeacher(teacherId: number): Promise<string> {
-  if (!teacherId) return "";
+/** Looks up the name of a teacher or retreat by ID, or "" if it has none. */
+async function resolveName(kind: "teachers" | "retreats", id: number | undefined): Promise<string> {
+  if (!id) return "";
 
-  const cacheKey = `teacher:${teacherId}`;
+  const cacheKey = `${kind}:${id}`;
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
 
   const body = new URLSearchParams({
     detail: "1",
-    items: String(teacherId),
+    items: String(id),
   });
-  const res = await fetch(`${BASE}/api/1/teachers/`, {
+  const res = await fetch(`${BASE}/api/1/${kind}/`, {
     method: "POST",
     body,
     headers: { "User-Agent": "DharmaSeedPlayer/1.0" },
@@ -479,8 +489,7 @@ async function resolveTeacher(teacherId: number): Promise<string> {
   const json = (await res.json()) as {
     items?: Record<string, { name?: string }>;
   };
-  const teacher = json.items?.[String(teacherId)];
-  const name = teacher?.name || "";
+  const name = json.items?.[String(id)]?.name || "";
 
   cacheSet(cacheKey, name);
   return name;
@@ -493,5 +502,5 @@ interface DharmaseedTalk {
   audio_url?: string;
   duration_in_minutes?: number;
   rec_date?: string;
-  retreat_title?: string;
+  retreat_id?: number;
 }
