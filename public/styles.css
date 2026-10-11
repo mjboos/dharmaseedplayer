@@ -393,6 +393,7 @@ header h1 {
 
 .talk-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   margin-top: 8px;
 }
@@ -429,6 +430,14 @@ header h1 {
 
 .talk-actions .resume-btn:hover {
   background: #d4e5ca;
+}
+
+.talk-description {
+  margin-top: 8px;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: #444;
+  white-space: pre-line;
 }
 
 #load-more {
@@ -680,7 +689,29 @@ header h1 {
   color: #666;
 }
 
-.queue-item button {
+.queue-item-links {
+  display: flex;
+  gap: 14px;
+  margin-top: 2px;
+}
+
+.queue-item-link {
+  background: none;
+  border: none;
+  padding: 2px 0;
+  font: inherit;
+  font-size: 0.78rem;
+  color: #2d5016;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.queue-item-link:hover {
+  color: #3d6b20;
+}
+
+.queue-item > button {
   background: none;
   border: none;
   cursor: pointer;
@@ -689,7 +720,7 @@ header h1 {
   padding: 4px;
 }
 
-.queue-item button:hover {
+.queue-item > button:hover {
   color: #333;
 }
 

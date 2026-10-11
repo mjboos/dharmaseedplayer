@@ -148,8 +148,8 @@ test("fetchTalkDetail returns cached talk after first request", async () => {
             description: "Desc",
             audio_url: "/talks/99991/file.mp3",
             duration_in_minutes: 12.6,
-            rec_date: "2025-03-01",
-            retreat_title: "Retreat X",
+            rec_date: "2025-03-01 14:30:00",
+            retreat_id: 808,
           },
         },
       });
@@ -165,6 +165,10 @@ test("fetchTalkDetail returns cached talk after first request", async () => {
       });
     }
 
+    if (url.endsWith("/api/1/retreats/")) {
+      return Response.json({ items: { "808": { name: "Retreat X" } } });
+    }
+
     return new Response(null, { status: 404 });
   });
 
@@ -178,7 +182,37 @@ test("fetchTalkDetail returns cached talk after first request", async () => {
     assert.equal(first?.teacher, "Teacher 314");
     assert.equal(first?.audioUrl, "https://www.dharmaseed.org/talks/99991/file.mp3");
     assert.equal(first?.durationMinutes, 13);
-    assert.equal(callCount, 2);
+    assert.equal(first?.date, "2025-03-01");
+    assert.equal(first?.retreatId, 808);
+    assert.equal(first?.retreatTitle, "Retreat X");
+    assert.equal(callCount, 3);
+  } finally {
+    restore();
+  }
+});
+
+test("fetchTalkDetail leaves out Dharma Seed's catch-all Unknown retreat", async () => {
+  const requested: string[] = [];
+  const restore = mockFetch(async (input) => {
+    const url = String(input);
+    requested.push(url);
+    if (url.endsWith("/api/1/talks/")) {
+      return Response.json({
+        items: { "99992": { title: "Loose Talk", teacher_id: 315, rec_date: "2025-03-02 09:00:00", retreat_id: 1 } },
+      });
+    }
+    if (url.endsWith("/api/1/teachers/")) {
+      return Response.json({ items: { "315": { name: "Teacher 315" } } });
+    }
+    return new Response(null, { status: 404 });
+  });
+
+  try {
+    const detail = await fetchTalkDetail(99992);
+    assert.ok(detail);
+    assert.equal(detail.retreatId, undefined);
+    assert.equal(detail.retreatTitle, undefined);
+    assert.equal(requested.some((url) => url.endsWith("/api/1/retreats/")), false);
   } finally {
     restore();
   }

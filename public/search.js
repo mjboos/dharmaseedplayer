@@ -1,5 +1,6 @@
-import { searchTalks, matchTeachers, getTeacherRetreats, getRetreatTalks } from "./api.js";
+import { searchTalks, matchTeachers, getTeacherRetreats, getRetreatTalks, getTalkDetail } from "./api.js";
 import { getPositionForTalk, formatTime } from "./player.js";
+import { linkTo, copyLink } from "./share.js";
 
 let currentQuery = "";
 let currentPage = 1;
@@ -7,6 +8,7 @@ let activeTeacherId = null;
 let activeTeacherName = "";
 let activeRetreatId = null;
 let activeRetreatName = "";
+let activeTalkId = null;
 let teacherQuery = "";
 let scopeTeacher = null; // { id, name } shown as a chip in the search box
 let loading = false;
@@ -59,12 +61,14 @@ export function initSearch({ onPlay, onQueue, onQueueAll }) {
   });
 
   window.addEventListener("popstate", () => {
-    const match = window.location.hash.match(/^#retreat\/(\d+)$/);
-    if (match) {
-      const id = parseInt(match[1], 10);
-      if (activeRetreatId !== id) showRetreat(id, "Retreat");
-    } else if (activeRetreatId) {
+    const route = parseHash();
+    if (route?.type === "retreat") {
+      if (activeRetreatId !== route.id) showRetreat(route.id, "Retreat");
+    } else if (route?.type === "talk") {
+      if (activeTalkId !== route.id) showTalk(route.id);
+    } else if (activeRetreatId || activeTalkId) {
       activeRetreatId = null;
+      activeTalkId = null;
       activeTeacherId = null;
       viewVersion++;
       loading = false;
@@ -88,6 +92,7 @@ function runSearch() {
   if (!q && !scopeTeacher) return;
   resetResults();
   activeRetreatId = null;
+  activeTalkId = null;
   if (scopeTeacher) {
     showTeacher(scopeTeacher, q);
   } else {
@@ -436,7 +441,7 @@ async function loadTeacherRetreats(teacherId) {
 
 // --- Retreat page ---
 
-function renderRetreatHeader(retreatName) {
+function renderRetreatHeader(retreatId, retreatName) {
   const header = document.createElement("div");
   header.className = "retreat-page-header";
   header.innerHTML = `
@@ -446,15 +451,8 @@ function renderRetreatHeader(retreatName) {
       <button class="queue-all-btn">Add all to "${esc(document.getElementById("playlist-active-name")?.textContent || "Queue")}"</button>
     </div>
   `;
-  header.querySelector(".share-btn").addEventListener("click", async (e) => {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      e.target.textContent = "Copied!";
-      setTimeout(() => { e.target.textContent = "Share"; }, 2000);
-    } catch {
-      prompt("Copy this link:", window.location.href);
-    }
-  });
+  const shareBtn = header.querySelector(".share-btn");
+  shareBtn.addEventListener("click", () => copyLink(linkTo(`retreat/${retreatId}`), shareBtn));
   header.querySelector(".queue-all-btn").addEventListener("click", () => {
     const talkEls = resultsEl.querySelectorAll(".talk-item");
     const talks = [...talkEls].map((el) => JSON.parse(el.dataset.talk));
@@ -467,6 +465,7 @@ function showRetreat(retreatId, retreatName) {
   activeRetreatId = retreatId;
   activeRetreatName = retreatName || "Retreat";
   activeTeacherId = null;
+  activeTalkId = null;
   currentPage = 1;
   viewVersion++;
   loading = false;
@@ -480,11 +479,16 @@ export function openRetreat(retreatId, retreatName) {
   showRetreat(retreatId, retreatName);
 }
 
+// Shareable pages: #retreat/<id> or #talk/<id>
+function parseHash() {
+  const match = window.location.hash.match(/^#(retreat|talk)\/(\d+)$/);
+  return match ? { type: match[1], id: parseInt(match[2], 10) } : null;
+}
+
 export function checkInitialHash() {
-  const match = window.location.hash.match(/^#retreat\/(\d+)$/);
-  if (match) {
-    showRetreat(parseInt(match[1], 10), "Retreat");
-  }
+  const route = parseHash();
+  if (route?.type === "retreat") showRetreat(route.id, "Retreat");
+  else if (route?.type === "talk") showTalk(route.id);
 }
 
 async function loadRetreatTalks(retreatId, clear) {
@@ -494,7 +498,7 @@ async function loadRetreatTalks(retreatId, clear) {
 
   if (clear) {
     resultsEl.innerHTML = "";
-    resultsEl.appendChild(renderRetreatHeader(activeRetreatName));
+    resultsEl.appendChild(renderRetreatHeader(retreatId, activeRetreatName));
   }
   resultsEl.insertAdjacentHTML("beforeend", '<div class="loading">Loading...</div>');
 
@@ -532,6 +536,35 @@ async function loadRetreatTalks(retreatId, clear) {
   }
 }
 
+// --- Talk page (opened from a shared #talk/<id> link) ---
+
+async function showTalk(talkId) {
+  activeTalkId = talkId;
+  activeRetreatId = null;
+  activeTeacherId = null;
+  currentPage = 1;
+  viewVersion++;
+  const myVersion = viewVersion;
+  loading = false;
+  resultsEl.innerHTML = '<div class="loading">Loading...</div>';
+  loadMoreBtn.hidden = true;
+
+  try {
+    // Keep the description out of the talk so it isn't stored in playlists
+    const { description, ...talk } = await getTalkDetail(talkId);
+    if (myVersion !== viewVersion) return;
+    const el = renderTalk(talk);
+    if (description) {
+      el.querySelector(".talk-meta").insertAdjacentHTML("afterend", `<p class="talk-description">${esc(description)}</p>`);
+    }
+    resultsEl.innerHTML = "";
+    resultsEl.appendChild(el);
+  } catch {
+    if (myVersion !== viewVersion) return;
+    resultsEl.innerHTML = '<div class="empty-state">Failed to load talk.</div>';
+  }
+}
+
 // --- Talk rendering ---
 
 function renderTalk(talk) {
@@ -554,11 +587,12 @@ function renderTalk(talk) {
       <span>${esc(talk.date)}</span>
       <span>${talk.durationMinutes} min</span>
     </div>
-    ${talk.retreatTitle && !activeRetreatId ? `<div class="talk-retreat"><button class="retreat-link" data-retreat-id="${talk.retreatId}">${esc(talk.retreatTitle)}</button></div>` : ""}
+    ${talk.retreatId && !activeRetreatId ? `<div class="talk-retreat"><button class="retreat-link" data-retreat-id="${talk.retreatId}">${esc(talk.retreatTitle || "Retreat")}</button></div>` : ""}
     <div class="talk-actions">
       <button class="play-btn">Play</button>
       ${savedPos > 0 ? `<button class="resume-btn">Resume ${formatTime(savedPos)}</button>` : ""}
       <button class="queue-btn">+ ${esc(document.getElementById("playlist-active-name")?.textContent || "Queue")}</button>
+      <button class="share-talk-btn" title="Copy link to talk">Share</button>
     </div>
   `;
   el.querySelector(".play-btn").addEventListener("click", () => playHandler(talk, 0));
@@ -567,6 +601,8 @@ function renderTalk(talk) {
     resumeBtn.addEventListener("click", () => playHandler(talk));
   }
   el.querySelector(".queue-btn").addEventListener("click", () => queueHandler(talk));
+  const shareBtn = el.querySelector(".share-talk-btn");
+  shareBtn.addEventListener("click", () => copyLink(linkTo(`talk/${talk.id}`), shareBtn));
   const teacherLink = el.querySelector(".teacher-link");
   if (teacherLink) {
     teacherLink.addEventListener("click", () => {

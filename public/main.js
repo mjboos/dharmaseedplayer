@@ -1,4 +1,4 @@
-import { initSearch, refreshResumeButtons, checkInitialHash } from "./search.js";
+import { initSearch, refreshResumeButtons, checkInitialHash, openRetreat } from "./search.js";
 import * as player from "./player.js";
 import * as queue from "./queue.js";
 
@@ -10,9 +10,13 @@ initSearch({
   onQueueAll: (talks) => queue.addAll(talks),
 });
 
-// Wire queue: play from queue (auto-resume saved position)
+// Wire queue: play from queue (auto-resume saved position), or open a talk's retreat
 queue.initQueue({
   onPlay: (talk) => player.play(talk),
+  onOpenRetreat: (talk) => {
+    openRetreat(talk.retreatId, talk.retreatTitle);
+    window.scrollTo(0, 0);
+  },
 });
 
 // When switching talks, update resume buttons in search results
@@ -26,5 +30,5 @@ player.onEnded(() => {
   if (nextTalk) player.play(nextTalk);
 });
 
-// Open retreat from URL hash (e.g. #retreat/123) for shareable links
+// Open a retreat or talk from the URL hash (#retreat/123, #talk/456) for shareable links
 checkInitialHash();
